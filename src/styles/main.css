@@ -1,0 +1,210 @@
+/* === ShellDesk 琥珀荧光控制台主题 === */
+:root {
+  /* 4 级背景层级 */
+  --bg-0: #0c0d10;          /* 窗口底色 */
+  --bg-1: #111318;          /* 面板底色 */
+  --bg-2: #171a21;          /* 悬浮/卡片 */
+  --bg-3: #1e222b;          /* hover */
+
+  /* 分隔线 */
+  --line: #232733;
+  --line-soft: #1b1f28;
+
+  /* 3 级文字层级 */
+  --tx-0: #e8eaf0;          /* 主文字 */
+  --tx-1: #9aa1b2;          /* 次文字 */
+  --tx-2: #5c6373;          /* 弱文字 */
+
+  /* 强调色 */
+  --amber: #ffb000;
+  --amber-dim: rgba(255, 176, 0, 0.14);
+  --green: #4ade80;
+  --red: #f87171;
+  --cyan: #67e8f9;
+
+  /* 字体 */
+  --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --disp: 'Chakra Petch', 'IBM Plex Mono', sans-serif;
+
+  --r: 8px;
+  --sidebar-width: 264px;
+  --tabbar-height: 40px;
+  --statusbar-height: 28px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg-0);
+  color: var(--tx-0);
+  user-select: none;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb {
+  background: #262b36;
+  border-radius: 99px;
+  border: 2px solid var(--bg-0);
+}
+::-webkit-scrollbar-thumb:hover { background: #333a49; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-2);
+  color: var(--tx-1);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--mono);
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--bg-3); color: var(--tx-0); }
+.btn-primary {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border-color: rgba(255, 176, 0, 0.35);
+}
+.btn-primary:hover {
+  background: rgba(255, 176, 0, 0.22);
+  border-color: rgba(255, 176, 0, 0.5);
+}
+.btn-danger { color: var(--red); }
+.btn-icon { padding: 4px 6px; font-size: 14px; }
+
+/* 输入框 */
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-0);
+  color: var(--tx-0);
+  font-size: 13px;
+  font-family: var(--mono);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--amber); }
+
+textarea.input {
+  resize: vertical;
+  min-height: 60px;
+  font-family: var(--mono);
+}
+
+/* 模态框 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 440px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.7);
+}
+
+.modal-wide { min-width: 560px; }
+
+.modal-title {
+  font-family: var(--disp);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--tx-0);
+  letter-spacing: 0.03em;
+}
+
+.form-group { margin-bottom: 12px; }
+.form-row { display: flex; gap: 8px; }
+.flex-1 { flex: 1; }
+
+.form-label {
+  display: block;
+  font-size: 11px;
+  color: var(--tx-1);
+  margin-bottom: 4px;
+  letter-spacing: 0.03em;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tx-1);
+}
+.form-check input { cursor: pointer; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--statusbar-height) + 16px);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-2);
+  border: 1px solid rgba(255, 176, 0, 0.35);
+  color: var(--tx-0);
+  font-size: 12px;
+  padding: 9px 14px;
+  border-radius: 9px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast.show { opacity: 1; transform: none; }
+
+/* xterm 终端容器 */
+.xterm-container {
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+}
+
+/* 通用动画 */
+@keyframes itemIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}

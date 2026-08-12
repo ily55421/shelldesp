@@ -1,0 +1,39 @@
+{
+  "name": "shelldesk",
+  "version": "1.0.0",
+  "description": "ShellDesk - Terminal / SSH / SFTP",
+  "main": "./out/main/index.js",
+  "author": "shelldesk",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "package:win": "electron-vite build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.14.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron-store": "^8.2.0",
+    "pinia": "^2.2.2",
+    "ssh2": "^1.17.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "@types/node": "^22.5.0",
+    "@types/ssh2": "^1.15.5",
+    "@vitejs/plugin-vue": "^5.1.0",
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.0",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

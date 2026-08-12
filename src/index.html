@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- H5: CSP 安全策略 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; script-src 'self'; connect-src 'self' ws://localhost:* http://localhost:*" />
+    <title>ShellDesk</title>
+    <style>
+      /* H5: 内联关键字体样式, 避免远程加载 */
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        src: local('IBM Plex Mono'), local('Cascadia Code'), local('Consolas');
+        font-weight: 400 600;
+      }
+      @font-face {
+        font-family: 'Chakra Petch';
+        src: local('Chakra Petch'), local('Segoe UI');
+        font-weight: 500 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

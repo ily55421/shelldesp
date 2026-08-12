@@ -1,0 +1,16 @@
+appId: com.shelldesk.app
+productName: ShellDesk
+directories:
+  output: dist
+files:
+  - out/**/*
+  - assets/**/*
+asar: false
+npmRebuild: false
+compression: maximum
+win:
+  target:
+    - target: dir
+      arch: [x64]
+  signAndEditExecutable: false
+  icon: assets/icons/icon.ico

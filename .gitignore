@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+
+# 开发调试文件
+err*.txt
+out*.txt
+stderr.txt
+mem-log/
+.codely/
+.codely-cli/
+
+# 测试临时文件
+test/
