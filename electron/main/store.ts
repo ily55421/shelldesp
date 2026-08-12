@@ -1,4 +1,4 @@
-import { ipcMain, app, safeStorage, dialog } from 'electron'
+import { ipcMain, app, safeStorage, dialog, BrowserWindow } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
 import type { SshHostEntry } from '../../src/types'

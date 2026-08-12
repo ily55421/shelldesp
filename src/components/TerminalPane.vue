@@ -21,6 +21,7 @@ let term: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
+let contextHandler: ((e: MouseEvent) => void) | null = null
 
 function initTerminal() {
   if (!containerRef.value) return
@@ -31,6 +32,7 @@ function initTerminal() {
     cursorBlink: true,
     scrollback: 2000,
     allowTransparency: false,
+    // 柔和色调: 文件夹/目录文字色更清晰, 避免刺眼的纯色块
     theme: {
       background: '#0c0d10',
       foreground: '#d3d7e0',
@@ -40,18 +42,18 @@ function initTerminal() {
       red: '#f87171',
       green: '#4ade80',
       yellow: '#ffb000',
-      blue: '#67e8f9',
+      blue: '#7dc4ff',
       magenta: '#c792ea',
-      cyan: '#67e8f9',
+      cyan: '#4fd6be',
       white: '#e8eaf0',
       brightBlack: '#5c6373',
-      brightRed: '#f87171',
-      brightGreen: '#4ade80',
-      brightYellow: '#ffb000',
-      brightBlue: '#67e8f9',
-      brightMagenta: '#c792ea',
-      brightCyan: '#67e8f9',
-      brightWhite: '#e8eaf0'
+      brightRed: '#ff7b72',
+      brightGreen: '#7ee787',
+      brightYellow: '#ffc44d',
+      brightBlue: '#8fc8ff',
+      brightMagenta: '#d2a8ff',
+      brightCyan: '#7ff0d8',
+      brightWhite: '#ffffff'
     }
   })
 
@@ -60,6 +62,47 @@ function initTerminal() {
   term.loadAddon(new WebLinksAddon())
   term.open(containerRef.value)
   fitAddon.fit()
+
+  // === 剪贴板: 复制 / 粘贴 ===
+  term.attachCustomKeyEventHandler((e) => {
+    if (!term) return true
+    if (e.type !== 'keydown') return true
+
+    // Ctrl+C: 有选中则复制到剪贴板, 否则作为 SIGINT 发送给 shell
+    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (term.hasSelection()) {
+        const sel = term.getSelection()
+        e.preventDefault() // 阻止原生复制到 textarea 造成重复
+        if (sel) navigator.clipboard.writeText(sel).catch(() => {})
+        term.clearSelection()
+        return false // 拦截, 不发送到终端
+      }
+      return true // 无选中, 交给 shell (中断)
+    }
+
+    // Ctrl+V 或 Ctrl+Shift+V: 粘贴剪贴板内容
+    // e.key 在按住 Shift 时为 'V' (大写), toLowerCase 已覆盖两种情况
+    if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+      e.preventDefault() // 关键: 阻止 xterm 隐藏 textarea 收到原生粘贴导致双次
+      navigator.clipboard.readText().then(text => {
+        if (term && text) term.paste(text)
+      }).catch(() => {})
+      return false // 拦截, 不发送到终端
+    }
+
+    return true
+  })
+
+  // 右键粘贴
+  contextHandler = (e: MouseEvent) => {
+    e.preventDefault()
+    if (term && !term.hasSelection()) {
+      navigator.clipboard.readText().then(text => {
+        if (term && text) term.paste(text)
+      }).catch(() => {})
+    }
+  }
+  containerRef.value.addEventListener('contextmenu', contextHandler)
 
   // 输入 → 写入
   term.onData(data => {
@@ -90,7 +133,6 @@ function initTerminal() {
   const { cols, rows } = getDims()
 
   if (props.tab.type === 'local') {
-    // 先 create (幂等: 已存在则跳过), 再 resume (获取缓冲数据)
     window.api.pty.create(props.tab.id, {
       shell: props.tab.shell,
       cwd: props.tab.cwd,
@@ -107,7 +149,6 @@ function initTerminal() {
       }
     })
   } else if (props.tab.type === 'ssh' && props.tab.ssh) {
-    // SSH: 先 resume 检查是否已有连接
     window.api.ssh.resume(props.tab.id, cols, rows).then(result => {
       if (result?.buffered) {
         term?.write(result.buffered)
@@ -115,7 +156,6 @@ function initTerminal() {
       if (result?.exited) {
         term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
       }
-      // resume 返回 null = 首次连接
       if (!result) {
         window.api.ssh.connect(props.tab.id, props.tab.ssh!).then(() => {
           return window.api.ssh.shell(props.tab.id, { cols, rows })
@@ -126,7 +166,6 @@ function initTerminal() {
     })
   }
 
-  // 监听容器大小变化 (防抖)
   resizeObserver = new ResizeObserver(() => {
     if (resizeTimer) clearTimeout(resizeTimer)
     resizeTimer = setTimeout(() => {
@@ -158,6 +197,9 @@ onUnmounted(() => {
   } else if (props.tab.type === 'ssh') {
     window.api.ssh.pause(props.tab.id)
     window.api.ssh.removeListeners(props.tab.id)
+  }
+  if (contextHandler && containerRef.value) {
+    containerRef.value.removeEventListener('contextmenu', contextHandler)
   }
   if (resizeTimer) clearTimeout(resizeTimer)
   resizeObserver?.disconnect()
@@ -197,5 +239,12 @@ onUnmounted(() => {
 
 .terminal-pane :deep(.xterm-viewport) {
   overflow-y: auto;
+}
+
+/* 终端文字/选区可复制 */
+.terminal-pane :deep(.xterm-screen) {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 </style>

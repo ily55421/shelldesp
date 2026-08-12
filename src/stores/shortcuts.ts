@@ -20,7 +20,9 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
 
   // --- 快捷指令 ---
   async function saveShortcuts() {
-    await window.api.store.shortcuts.set(shortcuts.value)
+    // Vue reactive proxy 不能直接通过 IPC structured clone, 需要先转纯对象
+    const plain = JSON.parse(JSON.stringify(shortcuts.value))
+    await window.api.store.shortcuts.set(plain)
   }
 
   function add(shortcut: Omit<ShortcutCommand, 'id'>) {
@@ -60,7 +62,8 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
 
   // --- 快捷路径 ---
   async function saveQuickPaths() {
-    await window.api.store.quickPaths.set(quickPaths.value)
+    const plain = JSON.parse(JSON.stringify(quickPaths.value))
+    await window.api.store.quickPaths.set(plain)
   }
 
   function addPath(path: Omit<QuickPath, 'id'>) {

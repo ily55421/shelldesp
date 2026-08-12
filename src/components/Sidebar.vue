@@ -267,7 +267,7 @@ async function connectSsh(host: SshHostEntry) {
 
 async function removeSshHost(id: string) {
   sshHosts.value = sshHosts.value.filter(h => h.id !== id)
-  await window.api.store.sshHosts.set(sshHosts.value)
+  await window.api.store.sshHosts.set(JSON.parse(JSON.stringify(sshHosts.value)))
   showToast('已移除 SSH 主机')
 }
 

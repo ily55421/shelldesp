@@ -119,7 +119,7 @@ async function connect() {
         config
       }
       hosts.push(entry)
-      await window.api.store.sshHosts.set(hosts)
+      await window.api.store.sshHosts.set(JSON.parse(JSON.stringify(hosts)))
       window.dispatchEvent(new CustomEvent('ssh-hosts-updated'))
     }
   }
