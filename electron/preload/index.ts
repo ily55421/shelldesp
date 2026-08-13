@@ -39,6 +39,8 @@ const api = {
       ipcRenderer.invoke('ssh:exec', id, command),
     disconnect: (id: string) =>
       ipcRenderer.send('ssh:disconnect', id),
+    ping: (id: string) =>
+      ipcRenderer.invoke('ssh:ping', id),
     pause: (id: string) =>
       ipcRenderer.send('ssh:pause', id),
     resume: (id: string, cols: number, rows: number) =>
@@ -96,7 +98,8 @@ const api = {
     },
     pickDirectory: () => ipcRenderer.invoke('store:pickDirectory'),
     pickFile: () => ipcRenderer.invoke('store:pickFile'),
-    getConfigPath: () => ipcRenderer.invoke('store:getConfigPath')
+    getConfigPath: () => ipcRenderer.invoke('store:getConfigPath'),
+    confirm: (message: string) => ipcRenderer.invoke('store:confirm', message)
   },
 
   // --- 窗口控制 ---

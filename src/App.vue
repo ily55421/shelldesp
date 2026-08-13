@@ -51,6 +51,7 @@ const showSettings = ref(false)
 function defaultShellId(): string {
   const shell = settingsStore.settings.defaultShell
   if (shell === 'cmd.exe') return 'cmd'
+  if (shell === 'powershell.exe') return 'powershell5'
   return 'pwsh7'
 }
 
@@ -73,10 +74,11 @@ function execCommand(tabId: string, command: string, isSsh: boolean) {
   else window.api.pty.exec(tabId, command)
 }
 
-// F2: confirmClose 设置 — 关闭标签前确认
-function confirmCloseTab(id: string) {
+// F2: confirmClose 设置 — 关闭标签前确认 (用 Electron dialog, 非 window.confirm)
+async function confirmCloseTab(id: string) {
   if (settingsStore.settings.confirmClose) {
-    if (!window.confirm('确认关闭此标签页?')) return
+    const ok = await window.api.store.confirm('确认关闭此标签页?')
+    if (!ok) return
   }
   tabsStore.closeTab(id)
 }
@@ -185,11 +187,14 @@ onMounted(async () => {
   restoreTabs()
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('open-settings', () => { showSettings.value = true })
+  // S4: 关窗前保存标签布局 (onUnmounted 在 Electron 关窗时不保证触发)
+  window.addEventListener('beforeunload', saveTabs)
 })
 
 onUnmounted(() => {
   // 2.7: 保存当前标签布局
   saveTabs()
+  window.removeEventListener('beforeunload', saveTabs)
   for (const tab of tabs.value) {
     if (tab.type === 'local') window.api.pty.kill(tab.id)
     else if (tab.type === 'ssh') window.api.ssh.disconnect(tab.id)
@@ -197,14 +202,14 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
 })
 
-// 2.7: 会话恢复
+// 2.7: 会话恢复 — S1: 剔除密码, 不落盘明文
 function saveTabs() {
   const layout = tabs.value.map(t => ({
     title: t.title,
     type: t.type,
     shell: t.shell,
     cwd: t.cwd,
-    ssh: t.ssh
+    ssh: t.ssh ? { ...t.ssh, password: undefined } : undefined
   }))
   settingsStore.update({ lastTabs: layout } as any)
 }
@@ -221,7 +226,10 @@ function restoreTabs() {
     if (t.type === 'ssh' && t.ssh) {
       tabsStore.createSshTab(t.title, t.ssh)
     } else {
-      tabsStore.createLocalTab(t.shell === 'cmd.exe' ? 'cmd' : 'pwsh7', t.cwd)
+      // S3: 映射 exe → shellId
+      const shellId = t.shell === 'cmd.exe' ? 'cmd'
+        : t.shell === 'powershell.exe' ? 'powershell5' : 'pwsh7'
+      tabsStore.createLocalTab(shellId, t.cwd)
     }
   }
 }

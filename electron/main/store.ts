@@ -147,4 +147,19 @@ export function registerStoreHandlers() {
     if (!isFromMainWindow(e.sender)) return ''
     return store.path
   })
+
+  // F2: 确认对话框 (替代 window.confirm, Electron 未实现)
+  ipcMain.handle('store:confirm', (e, message: string) => {
+    if (!isFromMainWindow(e.sender)) return false
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return false
+    const result = dialog.showMessageBoxSync(win, {
+      type: 'question',
+      buttons: ['确认', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+      message
+    })
+    return result === 0
+  })
 }

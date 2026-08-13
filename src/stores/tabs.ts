@@ -7,7 +7,7 @@ function genId() {
   return `tab-${++tabCounter}-${Date.now()}`
 }
 
-export type LocalShell = 'pwsh7' | 'cmd'
+export type LocalShell = 'pwsh7' | 'cmd' | 'powershell5'
 
 export interface LocalShellOption {
   id: LocalShell
@@ -18,6 +18,7 @@ export interface LocalShellOption {
 
 export const LOCAL_SHELLS: LocalShellOption[] = [
   { id: 'pwsh7', label: 'PowerShell 7', exe: 'pwsh.exe', icon: '⬛' },
+  { id: 'powershell5', label: 'Windows PowerShell', exe: 'powershell.exe', icon: '▸' },
   { id: 'cmd', label: '命令提示符', exe: 'cmd.exe', icon: '▶' }
 ]
 

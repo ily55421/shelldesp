@@ -229,10 +229,11 @@ function newSsh() {
   window.dispatchEvent(new CustomEvent('open-connect-dialog'))
 }
 
-function closeTab(id: string) {
-  // F2: confirmClose 设置
+// F2: confirmClose — 用 Electron dialog 替代 window.confirm
+async function closeTab(id: string) {
   if (settingsStore.settings.confirmClose) {
-    if (!window.confirm('确认关闭此标签页?')) return
+    const ok = await window.api.store.confirm('确认关闭此标签页?')
+    if (!ok) return
   }
   tabsStore.closeTab(id)
 }

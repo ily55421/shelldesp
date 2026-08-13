@@ -21,6 +21,7 @@ interface Window {
       resize: (id: string, cols: number, rows: number) => void
       exec: (id: string, command: string) => Promise<void>
       disconnect: (id: string) => void
+      ping: (id: string) => Promise<number>
       pause: (id: string) => void
       resume: (id: string, cols: number, rows: number) => Promise<{ buffered: string; exited: boolean } | null>
       onConnected: (id: string, cb: () => void) => void
@@ -58,6 +59,7 @@ interface Window {
       pickDirectory: () => Promise<string | null>
       pickFile: () => Promise<string | null>
       getConfigPath: () => Promise<string>
+      confirm: (message: string) => Promise<boolean>
     }
     win: {
       minimize: () => void

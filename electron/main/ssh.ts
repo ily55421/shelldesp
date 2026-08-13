@@ -232,6 +232,21 @@ export function registerSshHandlers() {
     cleanupSession(id)
   })
 
+  // S2: SSH 延迟测量 — 独立 exec 通道, 不污染用户 shell
+  ipcMain.handle('ssh:ping', async (e, id: string) => {
+    if (!isValidSender(e)) return -1
+    const session = sessions.get(id)
+    if (!session?.client) return -1
+    const start = Date.now()
+    return new Promise<number>((resolve) => {
+      session.client.exec('true', (err, stream) => {
+        if (err) { resolve(-1); return }
+        stream.on('close', () => resolve(Date.now() - start))
+        stream.end()
+      })
+    })
+  })
+
   // --- SFTP --- @deprecated SFTP UI 待 v1.3 实现, 当前无渲染层调用
   /** @deprecated 待 v1.3 SFTP 面板落地 */
   ipcMain.handle('sftp:open', async (e, id: string) => {

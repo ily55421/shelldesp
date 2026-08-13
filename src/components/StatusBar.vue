@@ -63,14 +63,12 @@ const cwdShort = computed(() => {
 })
 
 onMounted(() => {
-  // 2.6: SSH 延迟定时测量 (本地为 0)
-  latencyTimer = setInterval(() => {
+  // S2: SSH 延迟定时测量 — 独立 exec 通道, 不污染用户 shell
+  latencyTimer = setInterval(async () => {
     const tab = activeTab.value
     if (tab && tab.type === 'ssh' && tab.status === 'connected') {
-      const start = Date.now()
-      window.api.ssh.exec(tab.id, 'echo').then(() => {
-        latency.value = Date.now() - start
-      }).catch(() => { latency.value = 0 })
+      const ms = await window.api.ssh.ping(tab.id)
+      latency.value = ms >= 0 ? ms : 0
     } else {
       latency.value = 0
     }

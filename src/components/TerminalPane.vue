@@ -532,9 +532,9 @@ onUnmounted(() => {
 .search-btn:hover { background: var(--bg-3); color: var(--amber); }
 .search-btn.close:hover { color: var(--red); }
 
-/* 2.5: 右键菜单 */
+/* 2.5: 右键菜单 — S5: fixed 定位, 避免 absolute+clientX/Y 偏移 */
 .ctx-menu {
-  position: absolute;
+  position: fixed;
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: var(--r);
