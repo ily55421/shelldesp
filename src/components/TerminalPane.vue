@@ -29,6 +29,8 @@ let contextHandler: ((e: MouseEvent) => void) | null = null
 // M2: SSH 连接期间缓冲用户输入, stream 就绪后回放
 let sshReady = false
 let inputBuffer: string[] = []
+// A1/A2: 防止 ssh:exit + ssh:closed / onError + .catch 双写
+let disconnected = false
 
 function initTerminal() {
   if (!containerRef.value) return
@@ -139,9 +141,15 @@ function initTerminal() {
       // 连接已建立, shell 就绪在 connect+shell 完成后
     })
     window.api.ssh.onError(props.tab.id, (msg: string) => {
+      if (disconnected) return
+      disconnected = true
+      sshReady = false
+      tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write(`\x1b[31m[SSH 错误: ${msg}]\x1b[0m\r\n`)
     })
     window.api.ssh.onClosed(props.tab.id, () => {
+      if (disconnected) return
+      disconnected = true
       sshReady = false
       tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
@@ -150,6 +158,8 @@ function initTerminal() {
       term?.write(data)
     })
     window.api.ssh.onExit(props.tab.id, () => {
+      if (disconnected) return
+      disconnected = true
       sshReady = false
       tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
@@ -174,6 +184,9 @@ function initTerminal() {
       if (result?.exited) {
         term?.write('\r\n\x1b[33m[进程在后台已退出, 退出码: ' + (result.exitCode ?? 0) + ']\x1b[0m\r\n')
         tabsStore.updateStatus(props.tab.id, 'disconnected')
+      } else {
+        // A3: resume 成功, 标记为已连接
+        tabsStore.updateStatus(props.tab.id, 'connected')
       }
     }).catch(err => {
       term?.write(`\x1b[31m[终端启动失败: ${err.message}]\x1b[0m\r\n`)
@@ -209,8 +222,11 @@ function initTerminal() {
       }
       return null
     }).catch(err => {
-      term?.write(`\x1b[31m[连接失败: ${err.message}]\x1b[0m\r\n`)
+      if (disconnected) return
+      disconnected = true
+      sshReady = false
       tabsStore.updateStatus(props.tab.id, 'disconnected')
+      term?.write(`\x1b[31m[连接失败: ${err.message}]\x1b[0m\r\n`)
     })
   }
 
