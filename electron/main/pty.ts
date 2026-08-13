@@ -1,4 +1,4 @@
-import { ipcMain, IpcMainEvent, BrowserWindow } from 'electron'
+import { ipcMain, IpcMainEvent, IpcMainInvokeEvent, BrowserWindow } from 'electron'
 import * as pty from '@homebridge/node-pty-prebuilt-multiarch'
 
 interface PtySession {
@@ -24,11 +24,11 @@ let mainWindowRef: Electron.BrowserWindow | null = null
 export function setMainWindowRef(win: Electron.BrowserWindow | null) {
   mainWindowRef = win
 }
-function isValidSender(e: IpcMainEvent): boolean {
+function isValidSender(e: IpcMainEvent | IpcMainInvokeEvent): boolean {
   const win = BrowserWindow.fromWebContents(e.sender)
   return !!win && !!mainWindowRef && win.id === mainWindowRef.id
 }
-function getWin(e: IpcMainEvent): BrowserWindow {
+function getWin(e: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow {
   return BrowserWindow.fromWebContents(e.sender)!
 }
 

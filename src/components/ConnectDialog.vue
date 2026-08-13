@@ -103,25 +103,23 @@ async function connect() {
 
   tabsStore.createSshTab(name, config)
 
-  // M5: 保存时去重 (主进程也会去重, 这里先检查避免重复条目)
+  // M5: 保存时去重 + 更新已存在主机的配置
   if (saveHost.value) {
     const hosts = await window.api.store.sshHosts.get()
-    // 检查是否已存在相同 host:port:username
-    const existing = hosts.find(h =>
+    const existingIdx = hosts.findIndex(h =>
       h.config.host === config.host &&
       h.config.port === config.port &&
       h.config.username === config.username
     )
-    if (!existing) {
-      const entry: SshHostEntry = {
-        id: `ssh-${Date.now()}`,
-        name,
-        config
-      }
-      hosts.push(entry)
-      await window.api.store.sshHosts.set(JSON.parse(JSON.stringify(hosts)))
-      window.dispatchEvent(new CustomEvent('ssh-hosts-updated'))
+    if (existingIdx >= 0) {
+      // 更新已有条目的配置 (密码/密钥可能已变更)
+      hosts[existingIdx].config = config
+      hosts[existingIdx].name = name
+    } else {
+      hosts.push({ id: `ssh-${Date.now()}`, name, config })
     }
+    await window.api.store.sshHosts.set(JSON.parse(JSON.stringify(hosts)))
+    window.dispatchEvent(new CustomEvent('ssh-hosts-updated'))
   }
 
   connecting.value = false

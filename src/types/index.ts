@@ -1,11 +1,13 @@
 /** 共享类型定义 */
 
 export type TabType = 'local' | 'ssh'
+export type TabStatus = 'connecting' | 'connected' | 'disconnected'
 
 export interface Tab {
   id: string
   title: string
   type: TabType
+  status: TabStatus
   /** 本地终端: shell 名称; SSH: 远端 host */
   shell?: string
   cwd?: string

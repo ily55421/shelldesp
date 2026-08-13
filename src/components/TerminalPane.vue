@@ -11,10 +11,13 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { Tab } from '../types'
+import { useTabsStore } from '../stores/tabs'
 
 const props = defineProps<{
   tab: Tab
 }>()
+
+const tabsStore = useTabsStore()
 
 const containerRef = ref<HTMLDivElement>()
 let term: Terminal | null = null
@@ -22,6 +25,10 @@ let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let contextHandler: ((e: MouseEvent) => void) | null = null
+
+// M2: SSH 连接期间缓冲用户输入, stream 就绪后回放
+let sshReady = false
+let inputBuffer: string[] = []
 
 function initTerminal() {
   if (!containerRef.value) return
@@ -104,12 +111,16 @@ function initTerminal() {
   }
   containerRef.value.addEventListener('contextmenu', contextHandler)
 
-  // 输入 → 写入
+  // 输入 → 写入 (M2: SSH 连接期间缓冲输入)
   term.onData(data => {
     if (props.tab.type === 'local') {
       window.api.pty.write(props.tab.id, data)
     } else if (props.tab.type === 'ssh') {
-      window.api.ssh.write(props.tab.id, data)
+      if (sshReady) {
+        window.api.ssh.write(props.tab.id, data)
+      } else {
+        inputBuffer.push(data)
+      }
     }
   })
 
@@ -120,12 +131,27 @@ function initTerminal() {
     })
     window.api.pty.onExit(props.tab.id, () => {
       term?.write('\r\n\x1b[33m[进程已退出]\x1b[0m\r\n')
+      tabsStore.updateStatus(props.tab.id, 'disconnected')
     })
   } else if (props.tab.type === 'ssh') {
+    // M3: 注册 error/closed 监听, 展示断连详情
+    window.api.ssh.onConnected(props.tab.id, () => {
+      // 连接已建立, shell 就绪在 connect+shell 完成后
+    })
+    window.api.ssh.onError(props.tab.id, (msg: string) => {
+      term?.write(`\x1b[31m[SSH 错误: ${msg}]\x1b[0m\r\n`)
+    })
+    window.api.ssh.onClosed(props.tab.id, () => {
+      sshReady = false
+      tabsStore.updateStatus(props.tab.id, 'disconnected')
+      term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
+    })
     window.api.ssh.onData(props.tab.id, (data: string) => {
       term?.write(data)
     })
     window.api.ssh.onExit(props.tab.id, () => {
+      sshReady = false
+      tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
     })
   }
@@ -133,6 +159,7 @@ function initTerminal() {
   const { cols, rows } = getDims()
 
   if (props.tab.type === 'local') {
+    // M1: 补 .catch, pwsh 缺失或白名单拒绝时给用户反馈
     window.api.pty.create(props.tab.id, {
       shell: props.tab.shell,
       cwd: props.tab.cwd,
@@ -146,7 +173,11 @@ function initTerminal() {
       }
       if (result?.exited) {
         term?.write('\r\n\x1b[33m[进程在后台已退出, 退出码: ' + (result.exitCode ?? 0) + ']\x1b[0m\r\n')
+        tabsStore.updateStatus(props.tab.id, 'disconnected')
       }
+    }).catch(err => {
+      term?.write(`\x1b[31m[终端启动失败: ${err.message}]\x1b[0m\r\n`)
+      tabsStore.updateStatus(props.tab.id, 'disconnected')
     })
   } else if (props.tab.type === 'ssh' && props.tab.ssh) {
     window.api.ssh.resume(props.tab.id, cols, rows).then(result => {
@@ -155,14 +186,31 @@ function initTerminal() {
       }
       if (result?.exited) {
         term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
+        tabsStore.updateStatus(props.tab.id, 'disconnected')
+        return null
       }
       if (!result) {
-        window.api.ssh.connect(props.tab.id, props.tab.ssh!).then(() => {
+        // 新连接: connect → shell → 就绪
+        return window.api.ssh.connect(props.tab.id, props.tab.ssh!).then(() => {
           return window.api.ssh.shell(props.tab.id, { cols, rows })
-        }).catch(err => {
-          term?.write(`\x1b[31m[连接失败: ${err.message}]\x1b[0m\r\n`)
+        }).then(() => {
+          sshReady = true
+          tabsStore.updateStatus(props.tab.id, 'connected')
+          // M2: 回放连接期间缓冲的输入
+          for (const d of inputBuffer) {
+            window.api.ssh.write(props.tab.id, d)
+          }
+          inputBuffer = []
         })
+      } else {
+        // 恢复已有会话
+        sshReady = true
+        tabsStore.updateStatus(props.tab.id, 'connected')
       }
+      return null
+    }).catch(err => {
+      term?.write(`\x1b[31m[连接失败: ${err.message}]\x1b[0m\r\n`)
+      tabsStore.updateStatus(props.tab.id, 'disconnected')
     })
   }
 
@@ -192,11 +240,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (props.tab.type === 'local') {
-    window.api.pty.pause(props.tab.id)
     window.api.pty.removeListeners(props.tab.id)
+    window.api.pty.pause(props.tab.id)
   } else if (props.tab.type === 'ssh') {
-    window.api.ssh.pause(props.tab.id)
     window.api.ssh.removeListeners(props.tab.id)
+    window.api.ssh.pause(props.tab.id)
   }
   if (contextHandler && containerRef.value) {
     containerRef.value.removeEventListener('contextmenu', contextHandler)

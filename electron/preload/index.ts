@@ -27,7 +27,7 @@ const api = {
   },
 
   ssh: {
-    connect: (id: string, config: import('../src/types').SshConfig) =>
+    connect: (id: string, config: import('../../src/types').SshConfig) =>
       ipcRenderer.invoke('ssh:connect', id, config),
     shell: (id: string, opts: { cols: number; rows: number }) =>
       ipcRenderer.invoke('ssh:shell', id, opts),

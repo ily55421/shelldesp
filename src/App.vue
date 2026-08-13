@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, onKeyDown } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTabsStore } from './stores/tabs'
 import { useShortcutsStore } from './stores/shortcuts'
@@ -64,6 +64,27 @@ function execCommand(tabId: string, command: string, isSsh: boolean) {
 function handleExecute(shortcut: ShortcutCommand) {
   const isSsh = !!(shortcut.sshHost)
   const steps = resolveSteps(shortcut)
+
+  // H2: sshHost 快捷指令 — 在匹配的 SSH 标签上执行
+  if (isSsh && shortcut.sshHost) {
+    const sshTab = tabs.value.find(t =>
+      t.type === 'ssh' && t.ssh?.host === shortcut.sshHost
+    )
+    if (!sshTab) {
+      showToast('未找到 SSH 会话: ' + shortcut.sshHost)
+      return
+    }
+    tabsStore.setActive(sshTab.id)
+    const id = sshTab.id
+    if (shortcut.cwd) {
+      execCommand(id, `cd "${shortcut.cwd}"`, true)
+      setTimeout(() => runSteps(id, steps, 0, true), 300)
+    } else {
+      runSteps(id, steps, 0, true)
+    }
+    showToast('已执行: ' + shortcut.name)
+    return
+  }
 
   if (shortcut.newTab || activeTabId.value === null) {
     const id = tabsStore.createLocalTab('pwsh7', shortcut.cwd || undefined)

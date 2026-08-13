@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, nativeTheme, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import * as fs from 'fs'
 import { registerPtyHandlers, cleanupPtySessions, setMainWindowRef as setPtyRef } from './pty'
@@ -27,6 +27,19 @@ function cleanStaleLocks() {
     } catch { /* 忽略 */ }
   }
 }
+
+// H1: 窗口控制 IPC — 顶层注册一次 + sender 校验
+function isValidWinSender(e: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  const win = BrowserWindow.fromWebContents(e.sender)
+  return !!win && !!mainWindow && win.id === mainWindow.id
+}
+ipcMain.on('win:minimize', (e) => { if (isValidWinSender(e)) mainWindow?.minimize() })
+ipcMain.on('win:close', (e) => { if (isValidWinSender(e)) mainWindow?.close() })
+ipcMain.on('win:toggle-maximize', (e) => {
+  if (!isValidWinSender(e) || !mainWindow) return
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
+  else mainWindow.maximize()
+})
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -66,14 +79,6 @@ function createWindow() {
     return { action: 'deny' }
   })
 
-  // 窗口控制 IPC (只接受来自主窗口的调用)
-  ipcMain.on('win:minimize', () => mainWindow?.minimize())
-  ipcMain.on('win:close', () => mainWindow?.close())
-  ipcMain.on('win:toggle-maximize', () => {
-    if (!mainWindow) return
-    if (mainWindow.isMaximized()) mainWindow.unmaximize()
-    else mainWindow.maximize()
-  })
   mainWindow.on('maximize', () => mainWindow?.webContents.send('win:maximized', true))
   mainWindow.on('unmaximize', () => mainWindow?.webContents.send('win:maximized', false))
 }

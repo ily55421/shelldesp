@@ -52,7 +52,7 @@ export const useTabsStore = defineStore('tabs', () => {
     const id = genId()
     const exe = shellIdToExe(shellId)
     const title = shellIdToLabel(shellId)
-    tabs.value.push({ id, title, type: 'local', shell: exe, cwd })
+    tabs.value.push({ id, title, type: 'local', status: 'connected', shell: exe, cwd })
     activeTabId.value = id
     return id
   }
@@ -60,7 +60,7 @@ export const useTabsStore = defineStore('tabs', () => {
   function createSshTab(name: string, ssh: Tab['ssh']): string | null {
     if (!canCreateTab()) return null
     const id = genId()
-    tabs.value.push({ id, title: name, type: 'ssh', ssh })
+    tabs.value.push({ id, title: name, type: 'ssh', status: 'connecting', ssh })
     activeTabId.value = id
     return id
   }
@@ -81,6 +81,10 @@ export const useTabsStore = defineStore('tabs', () => {
     const tab = tabs.value.find(t => t.id === id)
     if (tab) tab.title = title
   }
+  function updateStatus(id: string, status: import('../types').TabStatus) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.status = status
+  }
 
-  return { tabs, activeTabId, activeTab, canCreateTab, createLocalTab, createSshTab, closeTab, setActive, updateTitle }
+  return { tabs, activeTabId, activeTab, canCreateTab, createLocalTab, createSshTab, closeTab, setActive, updateTitle, updateStatus }
 })

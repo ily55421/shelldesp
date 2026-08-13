@@ -60,7 +60,7 @@
           <div class="name">{{ host.name }}</div>
           <div class="sub">{{ host.config.username }}@{{ host.config.host }}</div>
         </div>
-        <span class="dot on"></span>
+        <span class="dot" :class="{ on: isHostConnected(host) }"></span>
       </div>
       <div class="item" @click="openConnectDialog">
         <span class="ic">＋</span>
@@ -229,6 +229,16 @@ const tabsStore = useTabsStore()
 const { shortcuts, quickPaths } = storeToRefs(shortcutsStore)
 const { show: showToast } = useToast()
 
+// H3: 真实连接状态
+const activeSessionCount = computed(() =>
+  tabsStore.tabs.filter(t => t.status === 'connected' || t.status === 'connecting').length
+)
+function isHostConnected(host: SshHostEntry): boolean {
+  return tabsStore.tabs.some(t =>
+    t.type === 'ssh' && t.ssh?.host === host.config.host && t.status === 'connected'
+  )
+}
+
 const showAddDialog = ref(false)
 const editingShortcut = ref<ShortcutCommand | null>(null)
 const showConnectDialog = ref(false)
@@ -236,7 +246,7 @@ const showPathDialog = ref(false)
 const editingPath = ref<QuickPath | null>(null)
 const sshHosts = ref<SshHostEntry[]>([])
 
-const sessionCount = computed(() => tabsStore.tabs.length)
+const sessionCount = computed(() => activeSessionCount.value)
 
 const dialogData = ref<{
   icon: string; name: string; command: string;

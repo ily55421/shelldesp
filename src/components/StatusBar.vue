@@ -31,8 +31,8 @@ const activeTab = computed(() => tabsStore.activeTab)
 const fontSize = ref(13)
 const latency = ref(0)
 
-// 模拟 latency 测量 (SSH 可通过 exec echo 测量, 本地直连为 0)
-const connected = computed(() => !!activeTab.value)
+// H3: 从 tab.status 读取真实连接状态
+const connected = computed(() => activeTab.value?.status === 'connected')
 
 const shellLabel = computed(() => {
   const tab = activeTab.value

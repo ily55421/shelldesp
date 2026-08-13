@@ -1,13 +1,13 @@
 # ShellDesk
 
-轻量化终端管理桌面工具 — 本地终端 / SSH / SFTP / 快捷指令
+轻量化终端管理桌面工具 — 本地终端 / SSH / 快捷指令
 
 ## 技术栈
 
 - Electron 33 + Vue 3 + Vite
 - xterm.js 6 (终端模拟器)
 - @homebridge/node-pty-prebuilt-multiarch (本地伪终端)
-- ssh2 (SSH/SFTP 客户端)
+- ssh2 (SSH 客户端)
 - electron-store (配置持久化)
 
 ## 开发
