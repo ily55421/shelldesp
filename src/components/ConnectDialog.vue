@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useTabsStore } from '../stores/tabs'
-import type { SshConfig, SshHostEntry } from '../types'
+import type { SshConfig } from '../types'
 
 const emit = defineEmits<{ close: [] }>()
 const tabsStore = useTabsStore()
@@ -85,6 +85,12 @@ async function pickKeyFile() {
 async function connect() {
   if (!form.value.host || !form.value.username) {
     errorMsg.value = '请填写主机和用户名'
+    return
+  }
+  // L7: 端口范围校验
+  const port = Number(form.value.port)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    errorMsg.value = '端口范围 1-65535'
     return
   }
 

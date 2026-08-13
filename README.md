@@ -2,6 +2,8 @@
 
 轻量化终端管理桌面工具 — 本地终端 / SSH / 快捷指令
 
+> **v1.1.0** — 质量加固: typecheck/lint/test 提交门禁、security.ts 抽取、端口校验、SFTP @deprecated 标注
+
 ## 技术栈
 
 - Electron 33 + Vue 3 + Vite
@@ -41,7 +43,8 @@ shelldesp/
 │   ├── main/          # Electron 主进程
 │   │   ├── index.ts   # 入口, 窗口创建, IPC 注册
 │   │   ├── pty.ts     # 本地终端 (node-pty) + pause/resume
-│   │   ├── ssh.ts     # SSH/SFTP (ssh2) + keepalive + StringDecoder
+│   │   ├── ssh.ts     # SSH (ssh2) + keepalive + StringDecoder
+│   │   ├── security.ts # 共享 IPC sender 校验
 │   │   └── store.ts   # 配置存储 (electron-store + safeStorage 加密)
 │   └── preload/
 │       └── index.ts   # contextBridge IPC 桥
@@ -66,3 +69,4 @@ shelldesp/
 `%APPDATA%/shelldesk/config/config.json`
 
 SSH 密码使用 `safeStorage.encryptString()` 加密存储。
+若系统不支持加密（如 Linux 缺少 libsecret），密码将以明文存储作为降级方案。

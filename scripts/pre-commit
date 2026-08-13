@@ -1,0 +1,27 @@
+#!/bin/sh
+# ShellDesk pre-commit hook: typecheck + lint + test
+# If any check fails, the commit is aborted.
+
+echo "[pre-commit] Running typecheck..."
+npm run typecheck 2>&1
+if [ $? -ne 0 ]; then
+  echo "[pre-commit] ❌ typecheck failed"
+  exit 1
+fi
+
+echo "[pre-commit] Running lint..."
+npx eslint . 2>&1
+if [ $? -ne 0 ]; then
+  echo "[pre-commit] ❌ lint failed (fix with: npm run lint)"
+  exit 1
+fi
+
+echo "[pre-commit] Running tests..."
+npm test 2>&1
+if [ $? -ne 0 ]; then
+  echo "[pre-commit] ❌ tests failed"
+  exit 1
+fi
+
+echo "[pre-commit] ✅ all checks passed"
+exit 0

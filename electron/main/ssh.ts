@@ -1,12 +1,16 @@
-import { ipcMain, IpcMainEvent, IpcMainInvokeEvent, BrowserWindow, dialog } from 'electron'
+import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { Client, ConnectConfig } from 'ssh2'
 import * as fs from 'fs'
 import * as path from 'path'
 import { StringDecoder } from 'string_decoder'
+import { isValidSender, getWin, setMainWindowRef } from './security'
+
+export { setMainWindowRef }
 
 interface SshSession {
   client: Client
   stream?: import('ssh2').ClientChannel
+  /** @deprecated SFTP UI 待 v1.3 实现, 当前无渲染层调用 */
   sftp?: import('ssh2').SFTPWrapper
   win: BrowserWindow
   buffer: string
@@ -20,19 +24,6 @@ interface SshSession {
 const sessions = new Map<string, SshSession>()
 const FLUSH_INTERVAL = 16
 const MAX_PAUSED_BUFFER = 512 * 1024
-
-// H1: sender 校验
-let mainWindowRef: Electron.BrowserWindow | null = null
-export function setMainWindowRef(win: Electron.BrowserWindow | null) {
-  mainWindowRef = win
-}
-function isValidSender(e: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  const win = BrowserWindow.fromWebContents(e.sender)
-  return !!win && !!mainWindowRef && win.id === mainWindowRef.id
-}
-function getWin(e: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow {
-  return BrowserWindow.fromWebContents(e.sender)!
-}
 
 function scheduleFlush(id: string, session: SshSession) {
   if (session.flushTimer) return
@@ -241,7 +232,8 @@ export function registerSshHandlers() {
     cleanupSession(id)
   })
 
-  // --- SFTP ---
+  // --- SFTP --- @deprecated SFTP UI 待 v1.3 实现, 当前无渲染层调用
+  /** @deprecated 待 v1.3 SFTP 面板落地 */
   ipcMain.handle('sftp:open', async (e, id: string) => {
     if (!isValidSender(e)) throw new Error('unauthorized')
     const session = sessions.get(id)

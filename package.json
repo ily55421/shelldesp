@@ -1,6 +1,6 @@
 {
   "name": "shelldesk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "ShellDesk - Terminal / SSH / SFTP",
   "main": "./out/main/index.js",
   "author": "shelldesk",
@@ -12,6 +12,10 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "lint": "eslint . --fix",
+    "lint:check": "eslint .",
+    "test": "node --test test/*.test.js",
+    "postinstall": "sh scripts/install-hooks.sh 2>/dev/null || true",
     "package:win": "electron-vite build && electron-builder --win --x64"
   },
   "dependencies": {
@@ -26,14 +30,19 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.5.0",
     "@types/ssh2": "^1.15.5",
     "@vitejs/plugin-vue": "^5.1.0",
     "electron": "33.4.11",
     "electron-builder": "^25.1.0",
     "electron-vite": "^2.3.0",
+    "eslint": "^10.8.1",
+    "eslint-plugin-vue": "^10.10.0",
     "typescript": "^5.5.0",
+    "typescript-eslint": "^8.67.0",
     "vite": "^5.4.0",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^2.1.0"
   }
 }

@@ -1,9 +1,12 @@
-import { ipcMain, IpcMainEvent, IpcMainInvokeEvent, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import * as pty from '@homebridge/node-pty-prebuilt-multiarch'
+import { isValidSender, getWin, setMainWindowRef } from './security'
+
+export { setMainWindowRef }
 
 interface PtySession {
   process: pty.IPty
-  win: BrowserWindow
+  win: import('electron').BrowserWindow
   buffer: string
   flushTimer: ReturnType<typeof setTimeout> | null
   pausedBuffer: string
@@ -18,19 +21,6 @@ const MAX_PAUSED_BUFFER = 512 * 1024
 
 // H1: shell 白名单
 const ALLOWED_SHELLS = new Set(['pwsh.exe', 'powershell.exe', 'cmd.exe'])
-
-// H1: sender 校验
-let mainWindowRef: Electron.BrowserWindow | null = null
-export function setMainWindowRef(win: Electron.BrowserWindow | null) {
-  mainWindowRef = win
-}
-function isValidSender(e: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  const win = BrowserWindow.fromWebContents(e.sender)
-  return !!win && !!mainWindowRef && win.id === mainWindowRef.id
-}
-function getWin(e: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow {
-  return BrowserWindow.fromWebContents(e.sender)!
-}
 
 function scheduleFlush(id: string, session: PtySession) {
   if (session.flushTimer) return

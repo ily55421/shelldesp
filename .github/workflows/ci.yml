@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev-link]
+  pull_request:
+    branches: [master, dev-link]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        env:
+          NODE_ENV: development
+        run: npm install --legacy-peer-deps
+
+      - name: Verify native module
+        run: |
+          if (Test-Path node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node) {
+            Write-Host "✅ pty.node exists"
+          } else {
+            cd node_modules/@homebridge/node-pty-prebuilt-multiarch
+            npx prebuild-install -r node --force
+            cd ../..
+          }
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        run: npx electron-builder --win --x64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShellDesk-win-unpacked
+          path: dist/win-unpacked/

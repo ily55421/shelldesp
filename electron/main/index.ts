@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, shell, nativeTheme, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, nativeTheme } from 'electron'
 import { join } from 'path'
 import * as fs from 'fs'
 import { registerPtyHandlers, cleanupPtySessions, setMainWindowRef as setPtyRef } from './pty'
 import { registerSshHandlers, cleanupSshSessions, setMainWindowRef as setSshRef } from './ssh'
 import { registerStoreHandlers, setMainWindowRef as setStoreRef } from './store'
+import { isValidSender, setMainWindowRef as setSecurityRef } from './security'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -28,15 +29,11 @@ function cleanStaleLocks() {
   }
 }
 
-// H1: 窗口控制 IPC — 顶层注册一次 + sender 校验
-function isValidWinSender(e: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  const win = BrowserWindow.fromWebContents(e.sender)
-  return !!win && !!mainWindow && win.id === mainWindow.id
-}
-ipcMain.on('win:minimize', (e) => { if (isValidWinSender(e)) mainWindow?.minimize() })
-ipcMain.on('win:close', (e) => { if (isValidWinSender(e)) mainWindow?.close() })
+// H1: 窗口控制 IPC — 顶层注册一次 + sender 校验 (复用 security 模块)
+ipcMain.on('win:minimize', (e) => { if (isValidSender(e)) mainWindow?.minimize() })
+ipcMain.on('win:close', (e) => { if (isValidSender(e)) mainWindow?.close() })
 ipcMain.on('win:toggle-maximize', (e) => {
-  if (!isValidWinSender(e) || !mainWindow) return
+  if (!isValidSender(e) || !mainWindow) return
   if (mainWindow.isMaximized()) mainWindow.unmaximize()
   else mainWindow.maximize()
 })
@@ -67,6 +64,7 @@ function createWindow() {
   setPtyRef(mainWindow)
   setSshRef(mainWindow)
   setStoreRef(mainWindow)
+  setSecurityRef(mainWindow)
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])

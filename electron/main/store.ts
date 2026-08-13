@@ -1,7 +1,10 @@
-import { ipcMain, app, safeStorage, dialog, BrowserWindow } from 'electron'
+import { ipcMain, app, safeStorage, dialog } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
 import type { SshHostEntry } from '../../src/types'
+import { isValidSender, setMainWindowRef } from './security'
+
+export { setMainWindowRef }
 
 interface StoreSchema {
   shortcuts: import('../../src/types').ShortcutCommand[]
@@ -51,15 +54,13 @@ function decryptPassword(stored: string): string {
   }
 }
 
-// H1: sender 校验
+// H1: sender 校验 (通过共享 security 模块)
+// store handler 使用 ipcMain.handle, 回调参数是 IpcMainInvokeEvent
+// isValidSender 接受 IpcMainEvent | IpcMainInvokeEvent, 此处传入 e (IpcMainInvokeEvent) 即可
 function isFromMainWindow(sender: Electron.WebContents): boolean {
-  const win = BrowserWindow.fromWebContents(sender)
-  return !!win && !!mainWindowRef && win.id === mainWindowRef.id
-}
-
-let mainWindowRef: Electron.BrowserWindow | null = null
-export function setMainWindowRef(win: Electron.BrowserWindow | null) {
-  mainWindowRef = win
+  // 包装 isValidSender: 构造一个满足接口的对象
+  const fakeEvent = { sender } as import('electron').IpcMainInvokeEvent
+  return isValidSender(fakeEvent)
 }
 
 export function registerStoreHandlers() {

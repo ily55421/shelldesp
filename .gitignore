@@ -13,4 +13,5 @@ mem-log/
 .codely-cli/
 
 # 测试临时文件
-test/
+test/tmp/
+test/.tmp/
