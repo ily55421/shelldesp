@@ -198,6 +198,9 @@ function initTerminal() {
         term?.write(result.buffered)
       }
       if (result?.exited) {
+        // O1: 置位 disconnected, 防止后续 ssh:closed/ssh:exit 双写
+        disconnected = true
+        sshReady = false
         term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
         tabsStore.updateStatus(props.tab.id, 'disconnected')
         return null
@@ -225,6 +228,8 @@ function initTerminal() {
       if (disconnected) return
       disconnected = true
       sshReady = false
+      // O2: 连接失败时清空缓冲的输入
+      inputBuffer = []
       tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write(`\x1b[31m[连接失败: ${err.message}]\x1b[0m\r\n`)
     })
