@@ -1,7 +1,7 @@
 {
   "name": "shelldesk",
   "version": "1.1.0",
-  "description": "ShellDesk - Terminal / SSH / SFTP",
+  "description": "ShellDesk - Terminal / SSH / 快捷指令",
   "main": "./out/main/index.js",
   "author": "shelldesk",
   "license": "MIT",
@@ -12,10 +12,10 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "lint": "eslint . --fix",
-    "lint:check": "eslint .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "node --test test/*.test.js",
-    "postinstall": "sh scripts/install-hooks.sh 2>/dev/null || true",
+    "postinstall": "node scripts/install-hooks.js",
     "package:win": "electron-vite build && electron-builder --win --x64"
   },
   "dependencies": {
