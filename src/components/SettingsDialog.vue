@@ -17,7 +17,7 @@
           <label class="form-label">字号</label>
           <input class="input" type="number" min="8" max="32"
             :value="settings.fontSize"
-            @change="update('fontSize', Number(($event.target as HTMLInputElement).value))"
+            @change="update('fontSize', Math.max(8, Math.min(32, Number(($event.target as HTMLInputElement).value) || 13)))"
           />
         </div>
         <div class="form-group flex-1">
@@ -64,15 +64,15 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore, type AppSettings } from '../stores/settings'
 
 defineEmits<{ close: [] }>()
 
 const store = useSettingsStore()
 const { settings } = storeToRefs(store)
 
-function update(key: string, value: unknown) {
-  store.update({ [key]: value } as any)
+function update(key: keyof AppSettings, value: string | number | boolean) {
+  store.update({ [key]: value } as Partial<AppSettings>)
 }
 </script>
 

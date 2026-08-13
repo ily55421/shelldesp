@@ -89,7 +89,8 @@ function doReconnect() {
   }
 
   tabsStore.updateStatus(props.tab.id, props.tab.type === 'ssh' ? 'connecting' : 'connected')
-  initTerminal()
+  // F5: 延迟 150ms 再 init, 避免旧 session 退出事件与新 init 竞争
+  setTimeout(() => initTerminal(), 150)
 }
 
 // 2.1: 响应设置变更
@@ -163,8 +164,9 @@ function initTerminal() {
   }
   containerRef.value.addEventListener('contextmenu', contextHandler)
 
-  // 输入 → 写入 (M2: SSH 连接期间缓冲输入)
+  // 输入 → 写入 (M2: SSH 连接期间缓冲输入; F8: overlay 期间屏蔽)
   term.onData(data => {
+    if (showReconnect.value) return
     if (props.tab.type === 'local') {
       window.api.pty.write(props.tab.id, data)
     } else if (props.tab.type === 'ssh') {

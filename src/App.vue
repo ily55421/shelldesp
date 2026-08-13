@@ -47,10 +47,17 @@ const { tabs, activeTabId, activeTab } = storeToRefs(tabsStore)
 const { toasts, show: showToast } = useToast()
 const showSettings = ref(false)
 
+// F1: defaultShell 设置 → shellId 映射
+function defaultShellId(): string {
+  const shell = settingsStore.settings.defaultShell
+  if (shell === 'cmd.exe') return 'cmd'
+  return 'pwsh7'
+}
+
 function newLocalTab() {
-  const id = tabsStore.createLocalTab('pwsh7')
+  const id = tabsStore.createLocalTab(defaultShellId())
   if (!id) showToast('标签页已达上限 (12)')
-  else showToast('新建 PowerShell 7 终端')
+  else showToast('新建终端')
 }
 
 function ensureLocalTab(): string | null {
@@ -58,12 +65,20 @@ function ensureLocalTab(): string | null {
   if (active && active.type === 'local') return active.id
   const localTab = tabs.value.find(t => t.type === 'local')
   if (localTab) return localTab.id
-  return tabsStore.createLocalTab('pwsh7')
+  return tabsStore.createLocalTab(defaultShellId())
 }
 
 function execCommand(tabId: string, command: string, isSsh: boolean) {
   if (isSsh) window.api.ssh.exec(tabId, command)
   else window.api.pty.exec(tabId, command)
+}
+
+// F2: confirmClose 设置 — 关闭标签前确认
+function confirmCloseTab(id: string) {
+  if (settingsStore.settings.confirmClose) {
+    if (!window.confirm('确认关闭此标签页?')) return
+  }
+  tabsStore.closeTab(id)
 }
 
 function handleExecute(shortcut: ShortcutCommand) {
@@ -92,7 +107,7 @@ function handleExecute(shortcut: ShortcutCommand) {
   }
 
   if (shortcut.newTab || activeTabId.value === null) {
-    const id = tabsStore.createLocalTab('pwsh7', shortcut.cwd || undefined)
+    const id = tabsStore.createLocalTab(defaultShellId(), shortcut.cwd || undefined)
     if (!id) { showToast('标签页已达上限'); return }
     setTimeout(() => {
       if (shortcut.cwd) {
@@ -146,7 +161,7 @@ function onKeydown(e: KeyboardEvent) {
     if (e.key === 't') { e.preventDefault(); newLocalTab() }
     else if (e.key === 'w') {
       e.preventDefault()
-      if (activeTabId.value) tabsStore.closeTab(activeTabId.value)
+      if (activeTabId.value) confirmCloseTab(activeTabId.value)
     }
     else if (e.key === 'd') {
       e.preventDefault()
@@ -166,7 +181,7 @@ watch(tabs, (newTabs, oldTabs) => {
 
 onMounted(async () => {
   await Promise.all([shortcutsStore.load(), settingsStore.load()])
-  if (tabs.value.length === 0) tabsStore.createLocalTab('pwsh7')
+  if (tabs.value.length === 0) tabsStore.createLocalTab(defaultShellId())
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('open-settings', () => { showSettings.value = true })
 })

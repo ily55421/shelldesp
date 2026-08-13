@@ -22,6 +22,7 @@
         @dragstart="onDragStart($event, tab.id)"
         @dragover.prevent="onDragOver($event, tab.id)"
         @drop="onDrop($event, tab.id)"
+        @dragend="dragId = ''"
       >
         <span class="t-ic">{{ tab.type === 'ssh' ? '⛓' : (tab.shell?.includes('pwsh') ? '▸' : '▮') }}</span>
         <input
@@ -80,12 +81,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTabsStore } from '../stores/tabs'
+import { useSettingsStore } from '../stores/settings'
 import { useToast } from '../composables/useToast'
 
 const tabsStore = useTabsStore()
+const settingsStore = useSettingsStore()
 const { tabs, activeTabId } = storeToRefs(tabsStore)
 const showNewMenu = ref(false)
 const { show: showToast } = useToast()
@@ -147,6 +150,19 @@ function ctxAction(action: string) {
     case 'closeAll': tabsStore.closeAll(); break
   }
 }
+
+// F3: 右键菜单外部点击关闭
+function onGlobalClick() {
+  if (contextMenu.value.visible) contextMenu.value.visible = false
+  if (showNewMenu.value) showNewMenu.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('click', onGlobalClick)
+})
+onUnmounted(() => {
+  window.removeEventListener('click', onGlobalClick)
+})
 
 function updateScrollState() {
   const el = scrollRef.value
@@ -214,6 +230,10 @@ function newSsh() {
 }
 
 function closeTab(id: string) {
+  // F2: confirmClose 设置
+  if (settingsStore.settings.confirmClose) {
+    if (!window.confirm('确认关闭此标签页?')) return
+  }
   tabsStore.closeTab(id)
 }
 </script>

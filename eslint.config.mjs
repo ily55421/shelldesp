@@ -61,6 +61,7 @@ export default [
       'vue/html-indent': 'off',
       'vue/first-attribute-linebreak': 'off',
       'vue/html-closing-bracket-spacing': 'off',
+      'vue/html-quotes': 'off',
       'vue/v-on-event-hyphenation': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'prefer-const': 'error',
