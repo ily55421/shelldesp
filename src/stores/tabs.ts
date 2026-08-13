@@ -85,6 +85,23 @@ export const useTabsStore = defineStore('tabs', () => {
     const tab = tabs.value.find(t => t.id === id)
     if (tab) tab.status = status
   }
+  function reorder(fromId: string, toId: string) {
+    const fromIdx = tabs.value.findIndex(t => t.id === fromId)
+    const toIdx = tabs.value.findIndex(t => t.id === toId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const [item] = tabs.value.splice(fromIdx, 1)
+    tabs.value.splice(toIdx, 0, item)
+  }
+  function closeOthers(id: string) {
+    const keep = tabs.value.find(t => t.id === id)
+    tabs.value = keep ? [keep] : []
+    if (keep && activeTabId.value !== keep.id) activeTabId.value = keep.id
+    else if (!keep) activeTabId.value = null
+  }
+  function closeAll() {
+    tabs.value = []
+    activeTabId.value = null
+  }
 
-  return { tabs, activeTabId, activeTab, canCreateTab, createLocalTab, createSshTab, closeTab, setActive, updateTitle, updateStatus }
+  return { tabs, activeTabId, activeTab, canCreateTab, createLocalTab, createSshTab, closeTab, setActive, updateTitle, updateStatus, reorder, closeOthers, closeAll }
 })

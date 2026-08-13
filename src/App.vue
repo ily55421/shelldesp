@@ -21,26 +21,31 @@
     <div class="toast-container">
       <div v-for="t in toasts" :key="t.id" class="toast show">{{ t.msg }}</div>
     </div>
+    <SettingsDialog v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTabsStore } from './stores/tabs'
 import { useShortcutsStore } from './stores/shortcuts'
+import { useSettingsStore } from './stores/settings'
 import { useToast } from './composables/useToast'
 import Sidebar from './components/Sidebar.vue'
 import TabBar from './components/TabBar.vue'
 import TerminalPane from './components/TerminalPane.vue'
 import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 import type { ShortcutCommand, CommandStep } from './types'
 
 const tabsStore = useTabsStore()
 const shortcutsStore = useShortcutsStore()
+const settingsStore = useSettingsStore()
 const { tabs, activeTabId, activeTab } = storeToRefs(tabsStore)
 const { toasts, show: showToast } = useToast()
+const showSettings = ref(false)
 
 function newLocalTab() {
   const id = tabsStore.createLocalTab('pwsh7')
@@ -160,9 +165,10 @@ watch(tabs, (newTabs, oldTabs) => {
 }, { deep: true })
 
 onMounted(async () => {
-  await shortcutsStore.load()
+  await Promise.all([shortcutsStore.load(), settingsStore.load()])
   if (tabs.value.length === 0) tabsStore.createLocalTab('pwsh7')
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('open-settings', () => { showSettings.value = true })
 })
 
 onUnmounted(() => {

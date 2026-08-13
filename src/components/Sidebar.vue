@@ -108,7 +108,7 @@
     <div class="side-foot">
       <div class="avatar">{{ sessionCount }}</div>
       <div class="who">活动会话<small>{{ sessionCount }} 个终端运行中</small></div>
-      <button class="gear" title="设置" @click="showToast('设置功能开发中…')">⚙</button>
+      <button class="gear" title="设置" @click="openSettings">⚙</button>
     </div>
 
     <!-- 快捷路径编辑对话框 -->
@@ -269,6 +269,7 @@ function newLocalTab(shellId?: string) {
 }
 
 function openConnectDialog() { showConnectDialog.value = true }
+function openSettings() { window.dispatchEvent(new CustomEvent('open-settings')) }
 
 async function connectSsh(host: SshHostEntry) {
   tabsStore.createSshTab(host.name, host.config)

@@ -1,23 +1,33 @@
 <template>
   <div ref="containerRef" class="terminal-pane">
     <div class="scanlines"></div>
+    <!-- 2.3: 断线重连 overlay -->
+    <div v-if="showReconnect" class="reconnect-overlay">
+      <div class="reconnect-card">
+        <span class="rc-icon">{{ tab.type === 'ssh' ? '⛓' : '▸' }}</span>
+        <p class="rc-msg">{{ tab.type === 'ssh' ? 'SSH 连接已断开' : '终端已退出' }}</p>
+        <button class="btn btn-primary" @click="reconnect">{{ tab.type === 'ssh' ? '重新连接' : '重启终端' }}</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { Tab } from '../types'
 import { useTabsStore } from '../stores/tabs'
+import { useSettingsStore, THEME_PRESETS } from '../stores/settings'
 
 const props = defineProps<{
   tab: Tab
 }>()
 
 const tabsStore = useTabsStore()
+const settingsStore = useSettingsStore()
 
 const containerRef = ref<HTMLDivElement>()
 let term: Terminal | null = null
@@ -31,39 +41,79 @@ let sshReady = false
 let inputBuffer: string[] = []
 // A1/A2: 防止 ssh:exit + ssh:closed / onError + .catch 双写
 let disconnected = false
+// 2.3: 断线重连
+const showReconnect = ref(false)
+let reconnectAttempts = 0
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+// 2.3: 断开后触发
+function onDisconnected() {
+  showReconnect.value = true
+  if (settingsStore.settings.autoReconnect && props.tab.type === 'ssh') {
+    scheduleAutoReconnect()
+  }
+}
+
+function scheduleAutoReconnect() {
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+  reconnectAttempts++
+  reconnectTimer = setTimeout(() => doReconnect(), delay)
+}
+
+function reconnect() {
+  reconnectAttempts = 0
+  doReconnect()
+}
+
+function doReconnect() {
+  showReconnect.value = false
+  disconnected = false
+  sshReady = false
+  inputBuffer = []
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+
+  // 清理旧 session 的 IPC 监听
+  if (props.tab.type === 'local') {
+    window.api.pty.removeListeners(props.tab.id)
+  } else if (props.tab.type === 'ssh') {
+    window.api.ssh.removeListeners(props.tab.id)
+  }
+
+  // 重新初始化终端 (重新注册事件 + 重新 create/connect)
+  if (term) { term.dispose(); term = null; fitAddon = null }
+  if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null }
+  if (contextHandler && containerRef.value) {
+    containerRef.value.removeEventListener('contextmenu', contextHandler)
+    contextHandler = null
+  }
+
+  tabsStore.updateStatus(props.tab.id, props.tab.type === 'ssh' ? 'connecting' : 'connected')
+  initTerminal()
+}
+
+// 2.1: 响应设置变更
+watch(() => settingsStore.settings.fontSize, (v) => {
+  if (term) { term.options.fontSize = v; fitAddon?.fit() }
+})
+watch(() => settingsStore.settings.fontFamily, (v) => {
+  if (term) { term.options.fontFamily = v; fitAddon?.fit() }
+})
+watch(() => settingsStore.settings.theme, (v) => {
+  if (term) { term.options.theme = THEME_PRESETS[v] || THEME_PRESETS.amber }
+})
 
 function initTerminal() {
   if (!containerRef.value) return
 
+  const s = settingsStore.settings
   term = new Terminal({
-    fontSize: 13,
-    fontFamily: 'IBM Plex Mono, Cascadia Code, Consolas, "Courier New", monospace',
+    fontSize: s.fontSize,
+    fontFamily: s.fontFamily,
     cursorBlink: true,
     scrollback: 2000,
     allowTransparency: false,
-    // 柔和色调: 文件夹/目录文字色更清晰, 避免刺眼的纯色块
-    theme: {
-      background: '#0c0d10',
-      foreground: '#d3d7e0',
-      cursor: '#ffb000',
-      selectionBackground: 'rgba(255, 176, 0, 0.2)',
-      black: '#0c0d10',
-      red: '#f87171',
-      green: '#4ade80',
-      yellow: '#ffb000',
-      blue: '#7dc4ff',
-      magenta: '#c792ea',
-      cyan: '#4fd6be',
-      white: '#e8eaf0',
-      brightBlack: '#5c6373',
-      brightRed: '#ff7b72',
-      brightGreen: '#7ee787',
-      brightYellow: '#ffc44d',
-      brightBlue: '#8fc8ff',
-      brightMagenta: '#d2a8ff',
-      brightCyan: '#7ff0d8',
-      brightWhite: '#ffffff'
-    }
+    theme: THEME_PRESETS[s.theme] || THEME_PRESETS.amber
   })
 
   fitAddon = new FitAddon()
@@ -134,6 +184,7 @@ function initTerminal() {
     window.api.pty.onExit(props.tab.id, () => {
       term?.write('\r\n\x1b[33m[进程已退出]\x1b[0m\r\n')
       tabsStore.updateStatus(props.tab.id, 'disconnected')
+      onDisconnected()
     })
   } else if (props.tab.type === 'ssh') {
     // M3: 注册 error/closed 监听, 展示断连详情
@@ -146,6 +197,7 @@ function initTerminal() {
       sshReady = false
       tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write(`\x1b[31m[SSH 错误: ${msg}]\x1b[0m\r\n`)
+      onDisconnected()
     })
     window.api.ssh.onClosed(props.tab.id, () => {
       if (disconnected) return
@@ -153,6 +205,7 @@ function initTerminal() {
       sshReady = false
       tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
+      onDisconnected()
     })
     window.api.ssh.onData(props.tab.id, (data: string) => {
       term?.write(data)
@@ -163,6 +216,7 @@ function initTerminal() {
       sshReady = false
       tabsStore.updateStatus(props.tab.id, 'disconnected')
       term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
+      onDisconnected()
     })
   }
 
@@ -184,6 +238,7 @@ function initTerminal() {
       if (result?.exited) {
         term?.write('\r\n\x1b[33m[进程在后台已退出, 退出码: ' + (result.exitCode ?? 0) + ']\x1b[0m\r\n')
         tabsStore.updateStatus(props.tab.id, 'disconnected')
+        onDisconnected()
       } else {
         // A3: resume 成功, 标记为已连接
         tabsStore.updateStatus(props.tab.id, 'connected')
@@ -203,6 +258,7 @@ function initTerminal() {
         sshReady = false
         term?.write('\r\n\x1b[33m[SSH 连接已断开]\x1b[0m\r\n')
         tabsStore.updateStatus(props.tab.id, 'disconnected')
+        onDisconnected()
         return null
       }
       if (!result) {
@@ -260,6 +316,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (reconnectTimer) clearTimeout(reconnectTimer)
   if (props.tab.type === 'local') {
     window.api.pty.removeListeners(props.tab.id)
     window.api.pty.pause(props.tab.id)
@@ -315,5 +372,31 @@ onUnmounted(() => {
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
+}
+
+/* 2.3: 断线重连 overlay */
+.reconnect-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 13, 16, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.reconnect-card {
+  text-align: center;
+  padding: 28px 36px;
+}
+.rc-icon {
+  font-size: 32px;
+  color: var(--amber);
+  display: block;
+  margin-bottom: 10px;
+}
+.rc-msg {
+  font-size: 13px;
+  color: var(--tx-1);
+  margin-bottom: 16px;
 }
 </style>

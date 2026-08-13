@@ -14,6 +14,8 @@ interface StoreSchema {
     fontSize: number
     fontFamily: string
     theme: string
+    confirmClose: boolean
+    autoReconnect: boolean
   }
 }
 
@@ -27,8 +29,10 @@ const store = new Store<StoreSchema>({
     settings: {
       defaultShell: 'pwsh.exe',
       fontSize: 13,
-      fontFamily: 'IBM Plex Mono, Cascadia Code, Consolas, monospace',
-      theme: 'dark'
+      fontFamily: 'IBM Plex Mono, Cascadia Code, Consolas, "Courier New", monospace',
+      theme: 'amber',
+      confirmClose: false,
+      autoReconnect: false
     }
   }
 })

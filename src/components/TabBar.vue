@@ -13,12 +13,27 @@
         v-for="tab in tabs"
         :key="tab.id"
         class="tab"
-        :class="{ active: tab.id === activeTabId }"
+        :class="{ active: tab.id === activeTabId, dragging: dragId === tab.id }"
+        draggable="true"
         @click="tabsStore.setActive(tab.id)"
-        @contextmenu.prevent="closeTab(tab.id)"
+        @dblclick="startRename(tab.id, tab.title)"
+        @auxclick="onAuxClick($event, tab.id)"
+        @contextmenu.prevent="openContextMenu($event, tab.id)"
+        @dragstart="onDragStart($event, tab.id)"
+        @dragover.prevent="onDragOver($event, tab.id)"
+        @drop="onDrop($event, tab.id)"
       >
         <span class="t-ic">{{ tab.type === 'ssh' ? '⛓' : (tab.shell?.includes('pwsh') ? '▸' : '▮') }}</span>
-        <span class="t-title">{{ tab.title }}</span>
+        <input
+          v-if="renamingId === tab.id"
+          ref="renameInputRef"
+          class="t-rename-input"
+          v-model="renameValue"
+          @blur="finishRename"
+          @keydown.enter="finishRename"
+          @keydown.esc="cancelRename"
+        />
+        <span v-else class="t-title">{{ tab.title }}</span>
         <button class="t-close" @click.stop="closeTab(tab.id)" title="关闭">✕</button>
       </div>
       <button class="tab-new" @click="showNewMenu = !showNewMenu" title="新建标签 (Ctrl+T)">+</button>
@@ -48,6 +63,19 @@
         <span>SSH 连接</span>
       </div>
     </div>
+
+    <!-- 2.2: 右键菜单 -->
+    <div
+      v-if="contextMenu.visible"
+      class="ctx-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @mouseleave="contextMenu.visible = false"
+    >
+      <div class="menu-item" @click="ctxAction('rename')">✎ 重命名</div>
+      <div class="menu-item" @click="ctxAction('close')">✕ 关闭</div>
+      <div class="menu-item" @click="ctxAction('closeOthers')">☒ 关闭其他</div>
+      <div class="menu-item" @click="ctxAction('closeAll')">⬚ 全部关闭</div>
+    </div>
   </div>
 </template>
 
@@ -65,6 +93,60 @@ const { show: showToast } = useToast()
 const scrollRef = ref<HTMLDivElement>()
 const canScrollLeft = ref(false)
 const canScrollRight = ref(false)
+
+// 2.2: 拖拽排序
+let dragId = ''
+function onDragStart(e: DragEvent, id: string) {
+  dragId = id
+  e.dataTransfer?.setData('text/plain', id)
+}
+function onDragOver(e: DragEvent, _id: string) { e.preventDefault() }
+function onDrop(e: DragEvent, id: string) {
+  e.preventDefault()
+  if (dragId && dragId !== id) tabsStore.reorder(dragId, id)
+  dragId = ''
+}
+
+// 2.2: 双击重命名
+const renamingId = ref<string | null>(null)
+const renameValue = ref('')
+const renameInputRef = ref<HTMLInputElement[]>([])
+function startRename(id: string, title: string) {
+  renamingId.value = id
+  renameValue.value = title
+  nextTick(() => {
+    const input = renameInputRef.value?.[0]
+    if (input) { input.focus(); input.select() }
+  })
+}
+function finishRename() {
+  if (renamingId.value && renameValue.value.trim()) {
+    tabsStore.updateTitle(renamingId.value, renameValue.value.trim())
+  }
+  renamingId.value = null
+}
+function cancelRename() { renamingId.value = null }
+
+// 2.2: 中键关闭
+function onAuxClick(e: MouseEvent, id: string) {
+  if (e.button === 1) { e.preventDefault(); closeTab(id) }
+}
+
+// 2.2: 右键菜单
+const contextMenu = ref({ visible: false, x: 0, y: 0, tabId: '' })
+function openContextMenu(e: MouseEvent, id: string) {
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, tabId: id }
+}
+function ctxAction(action: string) {
+  const id = contextMenu.value.tabId
+  contextMenu.value.visible = false
+  switch (action) {
+    case 'rename': startRename(id, tabs.value.find(t => t.id === id)?.title || ''); break
+    case 'close': closeTab(id); break
+    case 'closeOthers': tabsStore.closeOthers(id); break
+    case 'closeAll': tabsStore.closeAll(); break
+  }
+}
 
 function updateScrollState() {
   const el = scrollRef.value
@@ -314,5 +396,33 @@ function closeTab(id: string) {
   height: 1px;
   background: var(--line);
   margin: 4px 8px;
+}
+
+/* 2.2: 拖拽 */
+.tab.dragging { opacity: 0.4; }
+
+/* 2.2: 重命名输入框 */
+.t-rename-input {
+  font-size: 12px;
+  color: var(--tx-0);
+  background: var(--bg-0);
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  padding: 0 4px;
+  outline: none;
+  max-width: 120px;
+  font-family: var(--mono);
+}
+
+/* 2.2: 右键菜单 */
+.ctx-menu {
+  position: fixed;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px 0;
+  min-width: 140px;
+  z-index: 200;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
 }
 </style>
