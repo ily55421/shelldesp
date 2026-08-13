@@ -1,6 +1,20 @@
 <template>
   <div ref="containerRef" class="terminal-pane">
     <div class="scanlines"></div>
+    <!-- 2.4: 搜索栏 -->
+    <div v-if="showSearch" class="search-bar">
+      <input
+        ref="searchInputRef"
+        v-model="searchQuery"
+        class="search-input"
+        placeholder="搜索..."
+        @keydown.enter.prevent="doSearch($event.shiftKey ? 'prev' : 'next')"
+        @keydown.esc="closeSearch"
+      />
+      <button class="search-btn" @click="doSearch('prev')" title="上一个 (Shift+Enter)">↑</button>
+      <button class="search-btn" @click="doSearch('next')" title="下一个 (Enter)">↓</button>
+      <button class="search-btn close" @click="closeSearch" title="关闭 (Esc)">✕</button>
+    </div>
     <!-- 2.3: 断线重连 overlay -->
     <div v-if="showReconnect" class="reconnect-overlay">
       <div class="reconnect-card">
@@ -9,14 +23,30 @@
         <button class="btn btn-primary" @click="reconnect">{{ tab.type === 'ssh' ? '重新连接' : '重启终端' }}</button>
       </div>
     </div>
+    <!-- 2.5: 右键菜单 -->
+    <div
+      v-if="ctxMenu.visible"
+      class="ctx-menu"
+      :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      @mouseleave="ctxMenu.visible = false"
+    >
+      <div class="ctx-item" @click="ctxCopy">复制</div>
+      <div class="ctx-item" @click="ctxPaste">粘贴</div>
+      <div class="ctx-divider"></div>
+      <div class="ctx-item" @click="ctxClear">清屏</div>
+      <div class="ctx-item" @click="ctxSelectAll">全选</div>
+      <div class="ctx-divider"></div>
+      <div class="ctx-item" @click="openSearch">查找 (Ctrl+Shift+F)</div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import type { Tab } from '../types'
 import { useTabsStore } from '../stores/tabs'
@@ -45,6 +75,15 @@ let disconnected = false
 const showReconnect = ref(false)
 let reconnectAttempts = 0
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+// 2.4: 终端搜索
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchInputRef = ref<HTMLInputElement>()
+let searchAddon: SearchAddon | null = null
+
+// 2.5: 右键菜单
+const ctxMenu = ref({ visible: false, x: 0, y: 0 })
 
 // 2.3: 断开后触发
 function onDisconnected() {
@@ -104,6 +143,50 @@ watch(() => settingsStore.settings.theme, (v) => {
   if (term) { term.options.theme = THEME_PRESETS[v] || THEME_PRESETS.amber }
 })
 
+// 2.4: 搜索
+function openSearch() {
+  ctxMenu.value.visible = false
+  showSearch.value = true
+  nextTick(() => searchInputRef.value?.focus())
+}
+function closeSearch() {
+  showSearch.value = false
+  searchQuery.value = ''
+}
+function doSearch(direction: 'next' | 'prev') {
+  if (!searchAddon || !searchQuery.value) return
+  if (direction === 'next') searchAddon.findNext(searchQuery.value)
+  else searchAddon.findPrevious(searchQuery.value)
+}
+
+// 2.5: 右键菜单
+function openCtxMenu(e: MouseEvent) {
+  e.preventDefault()
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY }
+}
+function ctxCopy() {
+  ctxMenu.value.visible = false
+  if (term?.hasSelection()) {
+    const sel = term.getSelection()
+    if (sel) navigator.clipboard.writeText(sel).catch(() => {})
+    term.clearSelection()
+  }
+}
+function ctxPaste() {
+  ctxMenu.value.visible = false
+  navigator.clipboard.readText().then(text => {
+    if (term && text) term.paste(text)
+  }).catch(() => {})
+}
+function ctxClear() {
+  ctxMenu.value.visible = false
+  term?.clear()
+}
+function ctxSelectAll() {
+  ctxMenu.value.visible = false
+  term?.selectAll()
+}
+
 function initTerminal() {
   if (!containerRef.value) return
 
@@ -120,6 +203,9 @@ function initTerminal() {
   fitAddon = new FitAddon()
   term.loadAddon(fitAddon)
   term.loadAddon(new WebLinksAddon())
+  // 2.4: 加载搜索 addon
+  searchAddon = new SearchAddon()
+  term.loadAddon(searchAddon)
   term.open(containerRef.value)
   fitAddon.fit()
 
@@ -150,17 +236,19 @@ function initTerminal() {
       return false // 拦截, 不发送到终端
     }
 
+    // 2.4: Ctrl+Shift+F 搜索
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault()
+      openSearch()
+      return false
+    }
+
     return true
   })
 
-  // 右键粘贴
+  // 2.5: 右键菜单 (替代裸右键粘贴)
   contextHandler = (e: MouseEvent) => {
-    e.preventDefault()
-    if (term && !term.hasSelection()) {
-      navigator.clipboard.readText().then(text => {
-        if (term && text) term.paste(text)
-      }).catch(() => {})
-    }
+    openCtxMenu(e)
   }
   containerRef.value.addEventListener('contextmenu', contextHandler)
 
@@ -400,5 +488,72 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--tx-1);
   margin-bottom: 16px;
+}
+
+/* 2.4: 搜索栏 */
+.search-bar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.search-input {
+  width: 200px;
+  padding: 4px 8px;
+  border: 0;
+  background: var(--bg-0);
+  color: var(--tx-0);
+  font-size: 12px;
+  font-family: var(--mono);
+  outline: none;
+  border-radius: 4px;
+}
+.search-btn {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--tx-1);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  transition: all 0.12s;
+}
+.search-btn:hover { background: var(--bg-3); color: var(--amber); }
+.search-btn.close:hover { color: var(--red); }
+
+/* 2.5: 右键菜单 */
+.ctx-menu {
+  position: absolute;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px 0;
+  min-width: 160px;
+  z-index: 30;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+.ctx-item {
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tx-0);
+  transition: background 0.1s;
+}
+.ctx-item:hover { background: var(--bg-3); color: var(--amber); }
+.ctx-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 8px;
 }
 </style>

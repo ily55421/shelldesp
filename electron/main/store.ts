@@ -16,6 +16,7 @@ interface StoreSchema {
     theme: string
     confirmClose: boolean
     autoReconnect: boolean
+    lastTabs?: any[]
   }
 }
 

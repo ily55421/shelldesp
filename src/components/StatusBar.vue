@@ -23,13 +23,16 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useTabsStore } from '../stores/tabs'
+import { useSettingsStore } from '../stores/settings'
 
 const tabsStore = useTabsStore()
+const settingsStore = useSettingsStore()
 const activeTab = computed(() => tabsStore.activeTab)
 
-// M1: 从 store.settings 读取真实字号
-const fontSize = ref(13)
+// 2.6: 从 settings store 读真实字号
+const fontSize = computed(() => settingsStore.settings.fontSize)
 const latency = ref(0)
+let latencyTimer: ReturnType<typeof setInterval> | null = null
 
 // H3: 从 tab.status 读取真实连接状态
 const connected = computed(() => activeTab.value?.status === 'connected')
@@ -45,6 +48,7 @@ const shellLabel = computed(() => {
   return '—'
 })
 
+// 2.6: 真实 cwd — 本地读 tab.cwd, SSH 读 host
 const cwd = computed(() => {
   const tab = activeTab.value
   if (!tab) return '—'
@@ -58,19 +62,24 @@ const cwdShort = computed(() => {
   return c
 })
 
-// 加载设置
-let settingsLoaded = false
-async function loadSettings() {
-  if (settingsLoaded) return
-  settingsLoaded = true
-  try {
-    const s = await window.api.store.settings.get()
-    if (s?.fontSize) fontSize.value = s.fontSize
-  } catch {}
-}
+onMounted(() => {
+  // 2.6: SSH 延迟定时测量 (本地为 0)
+  latencyTimer = setInterval(() => {
+    const tab = activeTab.value
+    if (tab && tab.type === 'ssh' && tab.status === 'connected') {
+      const start = Date.now()
+      window.api.ssh.exec(tab.id, 'echo').then(() => {
+        latency.value = Date.now() - start
+      }).catch(() => { latency.value = 0 })
+    } else {
+      latency.value = 0
+    }
+  }, 10000)
+})
 
-onMounted(() => { loadSettings() })
-onUnmounted(() => {})
+onUnmounted(() => {
+  if (latencyTimer) clearInterval(latencyTimer)
+})
 </script>
 
 <style scoped>

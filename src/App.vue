@@ -181,18 +181,50 @@ watch(tabs, (newTabs, oldTabs) => {
 
 onMounted(async () => {
   await Promise.all([shortcutsStore.load(), settingsStore.load()])
-  if (tabs.value.length === 0) tabsStore.createLocalTab(defaultShellId())
+  // 2.7: 会话恢复 — 从 settings 读取上次标签布局
+  restoreTabs()
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('open-settings', () => { showSettings.value = true })
 })
 
 onUnmounted(() => {
+  // 2.7: 保存当前标签布局
+  saveTabs()
   for (const tab of tabs.value) {
     if (tab.type === 'local') window.api.pty.kill(tab.id)
     else if (tab.type === 'ssh') window.api.ssh.disconnect(tab.id)
   }
   window.removeEventListener('keydown', onKeydown)
 })
+
+// 2.7: 会话恢复
+function saveTabs() {
+  const layout = tabs.value.map(t => ({
+    title: t.title,
+    type: t.type,
+    shell: t.shell,
+    cwd: t.cwd,
+    ssh: t.ssh
+  }))
+  settingsStore.update({ lastTabs: layout } as any)
+}
+
+function restoreTabs() {
+  const saved = (settingsStore.settings as any).lastTabs as Array<{
+    title: string; type: 'local' | 'ssh'; shell?: string; cwd?: string; ssh?: any
+  }> | undefined
+  if (!saved || saved.length === 0) {
+    if (tabs.value.length === 0) tabsStore.createLocalTab(defaultShellId())
+    return
+  }
+  for (const t of saved) {
+    if (t.type === 'ssh' && t.ssh) {
+      tabsStore.createSshTab(t.title, t.ssh)
+    } else {
+      tabsStore.createLocalTab(t.shell === 'cmd.exe' ? 'cmd' : 'pwsh7', t.cwd)
+    }
+  }
+}
 </script>
 
 <style scoped>

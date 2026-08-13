@@ -8,6 +8,13 @@ export interface AppSettings {
   theme: string
   confirmClose: boolean
   autoReconnect: boolean
+  lastTabs?: Array<{
+    title: string
+    type: 'local' | 'ssh'
+    shell?: string
+    cwd?: string
+    ssh?: { host: string; port: number; username: string; password?: string; privateKey?: string; passphrase?: string }
+  }>
 }
 
 const DEFAULTS: AppSettings = {
