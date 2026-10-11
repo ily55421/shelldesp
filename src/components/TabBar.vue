@@ -25,6 +25,10 @@
         @dragend="dragId = ''"
       >
         <span class="t-ic">{{ tab.type === 'ssh' ? '⛓' : (tab.shell?.includes('pwsh') ? '▸' : '▮') }}</span>
+        <!-- 连接状态点: 借鉴 shell-rs 的状态图标 (连接中/已连接/已断开) -->
+        <span class="t-status" :class="tab.status" :title="statusLabel(tab.status)"></span>
+        <!-- 远端系统徽标: 探测成功后显示 (借鉴 shell-rs 的 HostMark) -->
+        <span v-if="tab.remoteOs" class="t-os" :title="tab.remoteOs.label">{{ tab.remoteOs.glyph }}</span>
         <input
           v-if="renamingId === tab.id"
           ref="renameInputRef"
@@ -35,6 +39,10 @@
           @keydown.esc="cancelRename"
         />
         <span v-else class="t-title">{{ tab.title }}</span>
+        <!-- SSH 延迟: 三色阈值 (借鉴 shell-rs 的 LatencyLabel) -->
+        <span v-if="tab.type === 'ssh' && latencyOf(tab.id) !== null" class="t-latency" :class="latencyLevel(latencyOf(tab.id)!)" :title="latencyTitle(latencyOf(tab.id)!)">
+          {{ latencyOf(tab.id) }}ms
+        </span>
         <button class="t-close" @click.stop="closeTab(tab.id)" title="关闭">✕</button>
       </div>
       <button class="tab-new" @click="showNewMenu = !showNewMenu" title="新建标签 (Ctrl+T)">+</button>
@@ -73,8 +81,29 @@
       @mouseleave="contextMenu.visible = false"
     >
       <div class="menu-item" @click="ctxAction('rename')">✎ 重命名</div>
+      <div class="menu-divider"></div>
       <div class="menu-item" @click="ctxAction('close')">✕ 关闭</div>
-      <div class="menu-item" @click="ctxAction('closeOthers')">☒ 关闭其他</div>
+      <div
+        class="menu-item"
+        :class="{ disabled: !canCloseSide(contextMenu.tabId, 'left') }"
+        @click="canCloseSide(contextMenu.tabId, 'left') && ctxAction('closeLeft')"
+      >
+        ⇤ 关闭左侧标签
+      </div>
+      <div
+        class="menu-item"
+        :class="{ disabled: !canCloseSide(contextMenu.tabId, 'right') }"
+        @click="canCloseSide(contextMenu.tabId, 'right') && ctxAction('closeRight')"
+      >
+        ⇥ 关闭右侧标签
+      </div>
+      <div
+        class="menu-item"
+        :class="{ disabled: tabs.length <= 1 }"
+        @click="tabs.length > 1 && ctxAction('closeOthers')"
+      >
+        ☒ 关闭其他
+      </div>
       <div class="menu-item" @click="ctxAction('closeAll')">⬚ 全部关闭</div>
     </div>
   </div>
@@ -84,11 +113,10 @@
 import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTabsStore } from '../stores/tabs'
-import { useSettingsStore } from '../stores/settings'
 import { useToast } from '../composables/useToast'
+import { closeTabWithConfirm } from '../composables/useAppShortcuts'
 
 const tabsStore = useTabsStore()
-const settingsStore = useSettingsStore()
 const { tabs, activeTabId } = storeToRefs(tabsStore)
 const showNewMenu = ref(false)
 const { show: showToast } = useToast()
@@ -146,10 +174,84 @@ function ctxAction(action: string) {
   switch (action) {
     case 'rename': startRename(id, tabs.value.find(t => t.id === id)?.title || ''); break
     case 'close': closeTab(id); break
+    case 'closeLeft': {
+      const n = tabsStore.closeSide(id, 'left')
+      if (n > 0) showToast(`已关闭左侧 ${n} 个标签`)
+      break
+    }
+    case 'closeRight': {
+      const n = tabsStore.closeSide(id, 'right')
+      if (n > 0) showToast(`已关闭右侧 ${n} 个标签`)
+      break
+    }
     case 'closeOthers': tabsStore.closeOthers(id); break
     case 'closeAll': tabsStore.closeAll(); break
   }
 }
+
+/** 该侧是否有关闭对象 (无对象则菜单项置灰, 借鉴 shell-rs 的 menu_with_disabled) */
+function canCloseSide(id: string, side: 'left' | 'right'): boolean {
+  const idx = tabs.value.findIndex(t => t.id === id)
+  if (idx === -1) return false
+  return side === 'left' ? idx > 0 : idx < tabs.value.length - 1
+}
+
+// --- 标签状态与延迟显示 (借鉴 shell-rs 的 LatencyLabel) ---
+
+function statusLabel(status: string): string {
+  return status === 'connected' ? '已连接' : status === 'connecting' ? '连接中' : '已断开'
+}
+
+/** 每个 SSH 标签的最近一次延迟 (ms); 无值表示未测量 */
+const latencies = ref<Record<string, number>>({})
+let latencyTimer: ReturnType<typeof setInterval> | null = null
+
+function latencyOf(id: string): number | null {
+  const v = latencies.value[id]
+  return typeof v === 'number' && v > 0 ? v : null
+}
+
+/** 三色阈值: <100 良好, 100~200 一般, >200 差 */
+function latencyLevel(ms: number): 'good' | 'fair' | 'poor' {
+  if (ms < 100) return 'good'
+  if (ms <= 200) return 'fair'
+  return 'poor'
+}
+
+function latencyTitle(ms: number): string {
+  const level = latencyLevel(ms)
+  const word = level === 'good' ? '良好' : level === 'fair' ? '一般' : '较差'
+  return `SSH 往返延迟 ${ms}ms (${word})`
+}
+
+/** 轮询活动 SSH 标签的延迟; 借鉴 shell-rs 的 LATENCY_INTERVAL = 5s */
+function pollLatency() {
+  const tab = tabs.value.find(t => t.id === activeTabId.value)
+  if (!tab || tab.type !== 'ssh' || tab.status !== 'connected') return
+  window.api.ssh.ping(tab.id).then((ms: number) => {
+    // -1 表示测量失败: 保留上一次读数, 避免闪烁成「—」
+    if (typeof ms === 'number' && ms >= 0) {
+      latencies.value = { ...latencies.value, [tab.id]: ms }
+    }
+  }).catch(() => {})
+}
+
+/** 标签关闭后清掉它的延迟读数, 否则 Map 随开关标签无限增长 */
+function pruneLatencies(ids: string[]) {
+  const live = new Set(ids)
+  let changed = false
+  const next: Record<string, number> = {}
+  for (const [id, ms] of Object.entries(latencies.value)) {
+    if (live.has(id)) next[id] = ms
+    else changed = true
+  }
+  if (changed) latencies.value = next
+}
+
+// 标签集合变化时清理残留读数
+watch(() => tabs.value.map(t => t.id).join('|'), () => {
+  pruneLatencies(tabs.value.map(t => t.id))
+})
 
 // F3: 右键菜单外部点击关闭
 function onGlobalClick() {
@@ -159,9 +261,12 @@ function onGlobalClick() {
 
 onMounted(() => {
   window.addEventListener('click', onGlobalClick)
+  latencyTimer = setInterval(pollLatency, 5000)
+  pollLatency()
 })
 onUnmounted(() => {
   window.removeEventListener('click', onGlobalClick)
+  if (latencyTimer) clearInterval(latencyTimer)
 })
 
 function updateScrollState() {
@@ -229,13 +334,9 @@ function newSsh() {
   window.dispatchEvent(new CustomEvent('open-connect-dialog'))
 }
 
-// F2: confirmClose — 用 Electron dialog 替代 window.confirm
-async function closeTab(id: string) {
-  if (settingsStore.settings.confirmClose) {
-    const ok = await window.api.store.confirm('确认关闭此标签页?')
-    if (!ok) return
-  }
-  tabsStore.closeTab(id)
+// F2: confirmClose — 统一走 useAppShortcuts.closeTabWithConfirm (Electron dialog)
+function closeTab(id: string) {
+  void closeTabWithConfirm(id)
 }
 </script>
 
@@ -326,6 +427,54 @@ async function closeTab(id: string) {
 }
 .tab.active .t-ic { color: var(--amber); }
 
+/* 连接状态点: 借鉴 shell-rs 的状态图标 */
+.t-status {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--tx-2);
+}
+.t-status.connected { background: var(--green); box-shadow: 0 0 5px rgba(74, 222, 128, 0.6); }
+.t-status.connecting {
+  background: var(--amber);
+  animation: tab-pulse 1.1s ease-in-out infinite;
+}
+.t-status.disconnected { background: var(--red); }
+
+@keyframes tab-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* 远端系统徽标: 借鉴 shell-rs 的 HostMark */
+.t-os {
+  flex: none;
+  font-size: 9px;
+  font-family: var(--disp);
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--tx-1);
+}
+.tab.active .t-os { background: var(--amber-dim); color: var(--amber); }
+
+/* SSH 延迟: 三色阈值 (借鉴 shell-rs 的 LatencyLabel) */
+.t-latency {
+  flex: none;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 700;
+  /* 固定最小宽度, 数字变化时右侧按钮不跳动 */
+  min-width: 38px;
+  text-align: right;
+}
+.t-latency.good { color: var(--green); }
+.t-latency.fair { color: var(--amber); }
+.t-latency.poor { color: var(--red); }
+
 .t-title {
   max-width: 140px;
   overflow: hidden;
@@ -405,6 +554,12 @@ async function closeTab(id: string) {
   transition: all 0.12s;
 }
 .menu-item:hover { background: var(--bg-3); }
+/* 无关闭对象时置灰 (借鉴 shell-rs 的 menu_with_disabled) */
+.menu-item.disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.menu-item.disabled:hover { background: transparent; }
 
 .menu-icon {
   font-size: 11px;

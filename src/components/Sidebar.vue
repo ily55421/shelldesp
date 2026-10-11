@@ -2,105 +2,124 @@
   <div class="sidebar">
     <div class="side-head">快捷面板</div>
 
-    <!-- 快捷路径 -->
-    <div class="section">
-      <div class="section-title">
-        <span class="label">快捷路径</span>
-        <button class="add-btn" @click="showPathDialog = true" title="添加常用目录 (Ctrl+D)">+</button>
-      </div>
-      <div class="item" v-for="qp in quickPaths" :key="qp.id"
-        draggable="true"
-        @dragstart="onPathDragStart($event, qp.id)"
-        @dragover.prevent="onPathDragOver($event, qp.id)"
-        @drop="onPathDrop($event, qp.id)"
-        @click="cdToPath(qp)"
-        @contextmenu.prevent="editPath(qp)"
-      >
-        <span class="ic">{{ qp.icon || '📁' }}</span>
-        <div class="meta">
-          <div class="name">{{ qp.name }}</div>
-          <div class="sub">{{ qp.path }}</div>
+    <div class="side-body">
+      <!-- 快捷路径 -->
+      <div class="section" :class="{ collapsed: collapsed.paths }">
+        <div class="section-title" @click="toggleSection('paths')">
+          <span class="label">快捷路径</span>
+          <span class="chev" :class="{ open: !collapsed.paths }">▸</span>
+          <button class="add-btn" @click.stop="showPathDialog = true" title="添加常用目录 (Ctrl+D)">+</button>
         </div>
-        <div class="acts">
-          <span title="在终端打开">▸</span>
-          <span title="移除" @click.stop="removePath(qp.id)">✕</span>
-        </div>
-      </div>
-      <div v-if="quickPaths.length === 0" class="empty" @click="showPathDialog = true">
-        <span class="plus">＋</span>
-        添加常用目录
-      </div>
-    </div>
-
-    <!-- 连接 -->
-    <div class="section">
-      <div class="section-title"><span class="label">连接</span></div>
-      <div class="item" @click="newLocalTab('pwsh7')">
-        <span class="ic" style="color: var(--cyan)">▸</span>
-        <div class="meta">
-          <div class="name">PowerShell 7</div>
-          <div class="sub">pwsh · 本地</div>
-        </div>
-        <span class="badge">默认</span>
-      </div>
-      <div class="item" @click="newLocalTab('cmd')">
-        <span class="ic">▮</span>
-        <div class="meta">
-          <div class="name">命令提示符</div>
-          <div class="sub">cmd · 本地</div>
-        </div>
-        <span class="dot"></span>
-      </div>
-      <div class="item" v-for="host in sshHosts" :key="host.id"
-        @click="connectSsh(host)"
-        @contextmenu.prevent="removeSshHost(host.id)"
-      >
-        <span class="ic" style="color: var(--green)">⛓</span>
-        <div class="meta">
-          <div class="name">{{ host.name }}</div>
-          <div class="sub">{{ host.config.username }}@{{ host.config.host }}</div>
-        </div>
-        <span class="dot" :class="{ on: isHostConnected(host) }"></span>
-      </div>
-      <div class="item" @click="openConnectDialog">
-        <span class="ic">＋</span>
-        <div class="meta">
-          <div class="name">新建 SSH 连接</div>
-          <div class="sub">host · port · 密钥</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 指令列表 -->
-    <div class="section flex-1">
-      <div class="section-title">
-        <span class="label">指令列表</span>
-        <button class="add-btn" @click="openAddShortcut" title="添加快捷指令">+</button>
-      </div>
-      <div class="item" v-for="sc in shortcuts" :key="sc.id"
-        draggable="true"
-        @dragstart="onScDragStart($event, sc.id)"
-        @dragover.prevent="onScDragOver($event, sc.id)"
-        @drop="onScDrop($event, sc.id)"
-        @click="executeShortcut(sc)"
-        @contextmenu.prevent="editShortcut(sc)"
-      >
-        <span class="ic">{{ sc.icon || '⌥' }}</span>
-        <div class="meta">
-          <div class="name">
-            {{ sc.name }}
-            <span v-if="sc.steps && sc.steps.length > 1" class="badge">{{ sc.steps.length }}步</span>
+        <div class="section-body">
+          <div class="section-inner">
+            <div class="item" v-for="qp in quickPaths" :key="qp.id"
+              draggable="true"
+              @dragstart="onPathDragStart($event, qp.id)"
+              @dragover.prevent="onPathDragOver($event, qp.id)"
+              @drop="onPathDrop($event, qp.id)"
+              @click="cdToPath(qp)"
+              @contextmenu.prevent="editPath(qp)"
+            >
+              <span class="ic">{{ qp.icon || '📁' }}</span>
+              <div class="meta">
+                <div class="name">{{ qp.name }}</div>
+                <div class="sub">{{ qp.path }}</div>
+              </div>
+              <div class="acts">
+                <span title="在终端打开">▸</span>
+                <span title="移除" @click.stop="removePath(qp.id)">✕</span>
+              </div>
+            </div>
+            <div v-if="quickPaths.length === 0" class="empty" @click="showPathDialog = true">
+              <span class="plus">＋</span>
+              添加常用目录
+            </div>
           </div>
-          <div class="sub">{{ formatCommand(sc) }}</div>
-        </div>
-        <div class="acts">
-          <span title="执行" @click.stop="executeShortcut(sc)">▸</span>
-          <span title="编辑" @click.stop="editShortcut(sc)">✎</span>
         </div>
       </div>
-      <div v-if="shortcuts.length === 0" class="empty" @click="openAddShortcut">
-        <span class="plus">＋</span>
-        添加快捷指令
+
+      <!-- 连接 -->
+      <div class="section" :class="{ collapsed: collapsed.conns }">
+        <div class="section-title" @click="toggleSection('conns')">
+          <span class="label">连接</span>
+          <span class="chev" :class="{ open: !collapsed.conns }">▸</span>
+        </div>
+        <div class="section-body">
+          <div class="section-inner">
+            <div class="item" @click="newLocalTab('pwsh7')">
+              <span class="ic" style="color: var(--cyan)">▸</span>
+              <div class="meta">
+                <div class="name">PowerShell 7</div>
+                <div class="sub">pwsh · 本地</div>
+              </div>
+              <span class="badge">默认</span>
+            </div>
+            <div class="item" @click="newLocalTab('cmd')">
+              <span class="ic">▮</span>
+              <div class="meta">
+                <div class="name">命令提示符</div>
+                <div class="sub">cmd · 本地</div>
+              </div>
+              <span class="dot"></span>
+            </div>
+            <div class="item" v-for="host in sshHosts" :key="host.id"
+              @click="connectSsh(host)"
+              @contextmenu.prevent="openHostMenu($event, host)"
+            >
+              <span class="ic" style="color: var(--green)">⛓</span>
+              <div class="meta">
+                <div class="name">{{ host.name }}</div>
+                <div class="sub">{{ host.config.username }}@{{ host.config.host }}</div>
+              </div>
+              <span class="dot" :class="{ on: isHostConnected(host) }"></span>
+            </div>
+            <div class="item" @click="openConnectDialog">
+              <span class="ic">＋</span>
+              <div class="meta">
+                <div class="name">新建 SSH 连接</div>
+                <div class="sub">host · port · 密钥</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 指令列表 -->
+      <div class="section" :class="{ collapsed: collapsed.cmds }">
+        <div class="section-title" @click="toggleSection('cmds')">
+          <span class="label">指令列表</span>
+          <span class="chev" :class="{ open: !collapsed.cmds }">▸</span>
+          <button class="add-btn" @click.stop="openAddShortcut" title="添加快捷指令">+</button>
+        </div>
+        <div class="section-body">
+          <div class="section-inner">
+            <div class="item" v-for="sc in shortcuts" :key="sc.id"
+              draggable="true"
+              @dragstart="onScDragStart($event, sc.id)"
+              @dragover.prevent="onScDragOver($event, sc.id)"
+              @drop="onScDrop($event, sc.id)"
+              @click="executeShortcut(sc)"
+              @contextmenu.prevent="editShortcut(sc)"
+            >
+              <span class="ic">{{ sc.icon || '⌥' }}</span>
+              <div class="meta">
+                <div class="name">
+                  {{ sc.name }}
+                  <span v-if="sc.steps && sc.steps.length > 1" class="badge">{{ sc.steps.length }}步</span>
+                </div>
+                <div class="sub">{{ formatCommand(sc) }}</div>
+              </div>
+              <div class="acts">
+                <span title="执行" @click.stop="executeShortcut(sc)">▸</span>
+                <span title="编辑" @click.stop="editShortcut(sc)">✎</span>
+              </div>
+            </div>
+            <div v-if="shortcuts.length === 0" class="empty" @click="openAddShortcut">
+              <span class="plus">＋</span>
+              添加快捷指令
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -109,6 +128,20 @@
       <div class="avatar">{{ sessionCount }}</div>
       <div class="who">活动会话<small>{{ sessionCount }} 个终端运行中</small></div>
       <button class="gear" title="设置" @click="openSettings">⚙</button>
+    </div>
+
+    <!-- SSH 主机右键菜单 (替代原「右键即删除」的危险交互) -->
+    <div
+      v-if="hostMenu.visible"
+      class="ctx-menu"
+      :style="{ left: hostMenu.x + 'px', top: hostMenu.y + 'px' }"
+      @mouseleave="hostMenu.visible = false"
+    >
+      <div class="ctx-item" @click="hostMenuAction('connect')">▸ 连接</div>
+      <div class="ctx-item" @click="hostMenuAction('test')">⟳ 测试连接</div>
+      <div class="ctx-item" @click="hostMenuAction('edit')">✎ 编辑</div>
+      <div class="ctx-divider"></div>
+      <div class="ctx-item danger" @click="hostMenuAction('remove')">✕ 从列表移除</div>
     </div>
 
     <!-- 快捷路径编辑对话框 -->
@@ -206,12 +239,16 @@
       </div>
     </div>
 
-    <ConnectDialog v-if="showConnectDialog" @close="showConnectDialog = false" />
+    <ConnectDialog
+      v-if="showConnectDialog"
+      :editing="editingHost"
+      @close="showConnectDialog = false; editingHost = null"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useShortcutsStore } from '../stores/shortcuts'
 import { useTabsStore } from '../stores/tabs'
@@ -239,9 +276,17 @@ function isHostConnected(host: SshHostEntry): boolean {
   )
 }
 
+// 侧栏分区折叠状态（默认折叠）
+const collapsed = ref({ paths: true, conns: true, cmds: true })
+function toggleSection(key: 'paths' | 'conns' | 'cmds') {
+  collapsed.value[key] = !collapsed.value[key]
+}
+
 const showAddDialog = ref(false)
 const editingShortcut = ref<ShortcutCommand | null>(null)
 const showConnectDialog = ref(false)
+/** 正在编辑的 SSH 主机 (null 表示新建) */
+const editingHost = ref<SshHostEntry | null>(null)
 const showPathDialog = ref(false)
 const editingPath = ref<QuickPath | null>(null)
 const sshHosts = ref<SshHostEntry[]>([])
@@ -274,6 +319,71 @@ function openSettings() { window.dispatchEvent(new CustomEvent('open-settings'))
 async function connectSsh(host: SshHostEntry) {
   tabsStore.createSshTab(host.name, host.config)
   showToast('连接 ' + host.name)
+}
+
+// --- SSH 主机右键菜单 ---
+const hostMenu = ref({ visible: false, x: 0, y: 0, hostId: '' })
+
+function openHostMenu(e: MouseEvent, host: SshHostEntry) {
+  hostMenu.value = { visible: true, x: e.clientX, y: e.clientY, hostId: host.id }
+}
+
+function hostMenuAction(action: 'connect' | 'test' | 'edit' | 'remove') {
+  const id = hostMenu.value.hostId
+  hostMenu.value.visible = false
+  const host = sshHosts.value.find(h => h.id === id)
+  if (!host) return
+  switch (action) {
+    case 'connect':
+      connectSsh(host)
+      break
+    case 'test':
+      void testHost(host)
+      break
+    case 'edit':
+      editSshHost(host)
+      break
+    case 'remove':
+      void removeSshHost(id)
+      break
+  }
+}
+
+/** 测试连接: 真登录一次, 把结果与指纹显示给用户 (借鉴 shell-rs 的「测试连接」) */
+async function testHost(host: SshHostEntry) {
+  showToast('正在测试 ' + host.name + ' ...', 60000)
+  try {
+    // host.config 是 reactive 代理, 必须转成普通对象再交给 IPC
+    // (否则结构化克隆失败: An object could not be cloned.)
+    const result = await window.api.ssh.test(JSON.parse(JSON.stringify(host.config)))
+    if (result.ok) {
+      const os = result.remoteOs ? ` · ${result.remoteOs}` : ''
+      showToast(`连接成功${os}`, 4000)
+    } else {
+      showToast('连接失败: ' + (result.reason || '未知原因'), 8000)
+    }
+  } catch (err) {
+    showToast('测试失败: ' + (err as Error).message, 8000)
+  }
+}
+
+// 菜单点击后本身已关闭, 这里只需处理「点了菜单之外的地方」
+function onGlobalClick() {
+  if (hostMenu.value.visible) hostMenu.value.visible = false
+}
+
+onMounted(() => {
+  window.addEventListener('click', onGlobalClick)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', onGlobalClick)
+})
+
+/** 编辑主机: 复用连接对话框, 预填已有配置 */
+function editSshHost(host: SshHostEntry) {
+  editingHost.value = host
+  showConnectDialog.value = true
 }
 
 async function removeSshHost(id: string) {
@@ -416,6 +526,32 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+/* SSH 主机右键菜单 */
+.ctx-menu {
+  position: fixed;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px 0;
+  min-width: 150px;
+  z-index: 200;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+.ctx-item {
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tx-0);
+  transition: background 0.1s;
+}
+.ctx-item:hover { background: var(--bg-3); color: var(--amber); }
+.ctx-item.danger:hover { color: var(--red); }
+.ctx-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 8px;
+}
+
 .side-head {
   padding: 14px 16px 10px;
   font-family: var(--disp);
@@ -426,30 +562,57 @@ onMounted(async () => {
   text-transform: uppercase;
 }
 
-.section { margin-bottom: 4px; }
-.section.flex-1 {
+.side-body {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+
+.section { margin-bottom: 4px; }
 
 .section-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   padding: 9px 16px 7px;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--tx-1);
   letter-spacing: 0.05em;
+  cursor: pointer;
+  user-select: none;
 }
+
+.section-title .chev {
+  margin-left: auto;
+  flex: none;
+  font-size: 9px;
+  color: var(--tx-2);
+  transition: transform 0.22s ease, color 0.22s ease;
+}
+.section-title .chev.open {
+  transform: rotate(90deg);
+  color: var(--amber);
+}
+
+/* 折叠动画: grid-template-rows 1fr <-> 0fr */
+.section-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.section-body > .section-inner { min-height: 0; overflow: hidden; }
+.section.collapsed .section-body { grid-template-rows: 0fr; }
+.section.collapsed .section-title .label::before { opacity: 0.35; }
 
 .section-title .label {
   display: flex;
   align-items: center;
   gap: 7px;
+  transition: color 0.15s;
 }
+.section-title:hover .label { color: var(--amber); }
 .section-title .label::before {
   content: "";
   width: 3px;
@@ -457,6 +620,7 @@ onMounted(async () => {
   border-radius: 2px;
   background: var(--amber);
   opacity: 0.85;
+  transition: opacity 0.22s ease;
 }
 
 .add-btn {

@@ -70,6 +70,13 @@ export const useTabsStore = defineStore('tabs', () => {
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx === -1) return
     tabs.value.splice(idx, 1)
+    // 标签被移除时断开后端连接, 并清掉它的 IPC 监听。
+    // 不清监听的话, 每开关一个 SSH 标签都会在渲染进程里留下
+    // 7 个永不回收的监听器 (connected/error/closed/data/exit/os/hostkey-mismatch)。
+    window.api?.ssh?.removeListeners?.(id)
+    window.api?.ssh?.disconnect?.(id)
+    window.api?.pty?.removeListeners?.(id)
+    window.api?.pty?.kill?.(id)
     if (activeTabId.value === id) {
       activeTabId.value = tabs.value.length > 0
         ? tabs.value[Math.max(0, idx - 1)].id
@@ -86,6 +93,17 @@ export const useTabsStore = defineStore('tabs', () => {
     const tab = tabs.value.find(t => t.id === id)
     if (tab) tab.status = status
   }
+  /** 远端系统探测结果 (连接成功后由主进程推送) */
+  function updateRemoteOs(id: string, info: { os: string; label: string; glyph: string }) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.remoteOs = info
+  }
+  /** 该主机当前是否已有活动会话 (侧栏状态点用) */
+  function hasSessionFor(host: string, username: string): boolean {
+    return tabs.value.some(t =>
+      t.type === 'ssh' && t.ssh?.host === host && t.ssh?.username === username
+    )
+  }
   function reorder(fromId: string, toId: string) {
     const fromIdx = tabs.value.findIndex(t => t.id === fromId)
     const toIdx = tabs.value.findIndex(t => t.id === toId)
@@ -94,15 +112,30 @@ export const useTabsStore = defineStore('tabs', () => {
     tabs.value.splice(toIdx, 0, item)
   }
   function closeOthers(id: string) {
-    const keep = tabs.value.find(t => t.id === id)
-    tabs.value = keep ? [keep] : []
-    if (keep && activeTabId.value !== keep.id) activeTabId.value = keep.id
-    else if (!keep) activeTabId.value = null
+    closeMany(tabs.value.filter(t => t.id !== id).map(t => t.id))
+  }
+  /** 关闭某一侧的全部标签 (借鉴 shell-rs 的 CloseScope::Left/Right) */
+  function closeSide(id: string, side: 'left' | 'right'): number {
+    const idx = tabs.value.findIndex(t => t.id === id)
+    if (idx === -1) return 0
+    const doomed = side === 'left' ? tabs.value.slice(0, idx) : tabs.value.slice(idx + 1)
+    if (doomed.length === 0) return 0
+    closeMany(doomed.map(t => t.id))
+    return doomed.length
   }
   function closeAll() {
-    tabs.value = []
-    activeTabId.value = null
+    closeMany(tabs.value.map(t => t.id))
   }
 
-  return { tabs, activeTabId, activeTab, canCreateTab, createLocalTab, createSshTab, closeTab, setActive, updateTitle, updateStatus, reorder, closeOthers, closeAll }
+  /**
+   * 批量关闭。
+   * 必须逐个走 closeTab: 直接过滤数组会跳过断开连接与清理监听,
+   * 造成后端会话与 IPC 监听器泄漏。closeTab 顺带修正 activeTabId,
+   * 因此这里不需要另写一套激活项逻辑。
+   */
+  function closeMany(ids: string[]) {
+    for (const id of ids) closeTab(id)
+  }
+
+  return { tabs, activeTabId, activeTab, canCreateTab, createLocalTab, createSshTab, closeTab, setActive, updateTitle, updateStatus, updateRemoteOs, hasSessionFor, reorder, closeOthers, closeSide, closeAll }
 })

@@ -3,15 +3,15 @@
     <div class="logo">
       <img :src="logoUrl" alt="ShellDesk" class="logo-img" />
       <span class="logo-text">ShellDesk</span>
-      <span class="ver">v1.0</span>
+      <span v-if="version" class="ver">v{{ version }}</span>
     </div>
     <div class="drag"></div>
     <div class="win-controls">
       <button class="win-btn" title="最小化" @click="minimize">
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
       </button>
-      <button class="win-btn" :title="maximized ? '还原' : '最大化'" @click="toggleMaximize">
-        <svg v-if="!maximized" width="12" height="12" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+      <button class="win-btn" :title="maxBtnTitle" @click="onMaxClick">
+        <svg v-if="!maximized && !fullscreen" width="12" height="12" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
         <svg v-else width="12" height="12" viewBox="0 0 12 12"><rect x="2.5" y="4" width="5" height="5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M4.5 4V2.5h5V7.5H8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
       </button>
       <button class="win-btn close" title="关闭" @click="close">
@@ -22,24 +22,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 import logoUrl from '../assets/shelldesk-logo.svg'
 const maximized = ref(false)
+const fullscreen = ref(false)
+const version = ref('')
+
+const maxBtnTitle = computed(() =>
+  fullscreen.value ? '退出全屏 (F11)' : maximized.value ? '还原' : '最大化'
+)
 
 function minimize() { window.api.win.minimize() }
 function close() { window.api.win.close() }
 function toggleMaximize() { window.api.win.toggleMaximize() }
+function onMaxClick() {
+  if (fullscreen.value) window.api.win.toggleFullscreen()
+  else toggleMaximize()
+}
 
 onMounted(() => {
+  window.api.app.getVersion().then(v => { version.value = v }).catch(() => {})
   window.api.win.onMaximized((v: boolean) => {
     maximized.value = v
   })
-  // 双击标题栏切换最大化
+  window.api.win.onFullscreen((v: boolean) => {
+    fullscreen.value = v
+  })
+  // 双击标题栏切换最大化 (全屏时先退出全屏)
   const titlebar = document.querySelector('.titlebar')
   titlebar?.addEventListener('dblclick', (e) => {
     if ((e.target as HTMLElement).closest('.win-controls')) return
-    toggleMaximize()
+    onMaxClick()
   })
 })
 </script>

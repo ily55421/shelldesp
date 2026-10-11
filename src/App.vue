@@ -1,8 +1,16 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :style="{ '--sidebar-width': settingsStore.settings.sidebarWidth + 'px' }">
     <TitleBar />
     <div class="body">
-      <Sidebar @execute="handleExecute" @cdToPath="handleCdToPath" />
+      <Sidebar v-show="settingsStore.settings.sidebarVisible" @execute="handleExecute" @cdToPath="handleCdToPath" />
+      <div
+        v-if="settingsStore.settings.sidebarVisible"
+        class="sidebar-resizer"
+        :class="{ active: resizing }"
+        title="拖拽调整侧栏宽度, 双击复位"
+        @mousedown="startSidebarResize"
+        @dblclick="resetSidebarWidth"
+      ></div>
       <div class="main-area">
         <TabBar />
         <div class="terminal-area">
@@ -15,6 +23,7 @@
             </div>
           </div>
         </div>
+        <SystemStatusPanel v-if="settingsStore.settings.showSystemStatus" />
         <StatusBar />
       </div>
     </div>
@@ -32,12 +41,22 @@ import { useTabsStore } from './stores/tabs'
 import { useShortcutsStore } from './stores/shortcuts'
 import { useSettingsStore } from './stores/settings'
 import { useToast } from './composables/useToast'
+import {
+  handleAppShortcut,
+  isFormField,
+  createDefaultLocalTab,
+  defaultShellId,
+  SIDEBAR_MIN,
+  SIDEBAR_MAX,
+  SIDEBAR_DEFAULT
+} from './composables/useAppShortcuts'
 import Sidebar from './components/Sidebar.vue'
 import TabBar from './components/TabBar.vue'
 import TerminalPane from './components/TerminalPane.vue'
 import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
+import SystemStatusPanel from './components/SystemStatusPanel.vue'
 import type { ShortcutCommand, CommandStep } from './types'
 
 const tabsStore = useTabsStore()
@@ -47,18 +66,8 @@ const { tabs, activeTabId, activeTab } = storeToRefs(tabsStore)
 const { toasts, show: showToast } = useToast()
 const showSettings = ref(false)
 
-// F1: defaultShell 设置 → shellId 映射
-function defaultShellId(): string {
-  const shell = settingsStore.settings.defaultShell
-  if (shell === 'cmd.exe') return 'cmd'
-  if (shell === 'powershell.exe') return 'powershell5'
-  return 'pwsh7'
-}
-
 function newLocalTab() {
-  const id = tabsStore.createLocalTab(defaultShellId())
-  if (!id) showToast('标签页已达上限 (12)')
-  else showToast('新建终端')
+  createDefaultLocalTab()
 }
 
 function ensureLocalTab(): string | null {
@@ -74,14 +83,7 @@ function execCommand(tabId: string, command: string, isSsh: boolean) {
   else window.api.pty.exec(tabId, command)
 }
 
-// F2: confirmClose 设置 — 关闭标签前确认 (用 Electron dialog, 非 window.confirm)
-async function confirmCloseTab(id: string) {
-  if (settingsStore.settings.confirmClose) {
-    const ok = await window.api.store.confirm('确认关闭此标签页?')
-    if (!ok) return
-  }
-  tabsStore.closeTab(id)
-}
+// F2: confirmClose 设置 — 关闭标签前确认 (统一在 useAppShortcuts.closeTabWithConfirm)
 
 function handleExecute(shortcut: ShortcutCommand) {
   const isSsh = !!(shortcut.sshHost)
@@ -154,23 +156,50 @@ function handleCdToPath(path: string) {
   showToast('已跳转到 ' + path)
 }
 
-// M2: 全局快捷键
+// M2: 全局快捷键 — 统一由 useAppShortcuts 处理 (终端聚焦时由 TerminalPane 转发)
 function onKeydown(e: KeyboardEvent) {
-  // 不在输入框中
-  const target = e.target as HTMLElement
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
-  if (e.ctrlKey) {
-    if (e.key === 't') { e.preventDefault(); newLocalTab() }
-    else if (e.key === 'w') {
-      e.preventDefault()
-      if (activeTabId.value) confirmCloseTab(activeTabId.value)
-    }
-    else if (e.key === 'd') {
-      e.preventDefault()
-      window.dispatchEvent(new CustomEvent('open-path-dialog'))
-    }
-  }
+  if (isFormField(e.target)) return
+  handleAppShortcut(e)
 }
+
+// 侧栏宽度拖拽 (双击复位 / Ctrl+B 折叠)
+const resizing = ref(false)
+function startSidebarResize(e: MouseEvent) {
+  e.preventDefault()
+  resizing.value = true
+  const startX = e.clientX
+  const startWidth = settingsStore.settings.sidebarWidth
+  const onMove = (ev: MouseEvent) => {
+    settingsStore.settings.sidebarWidth = Math.max(
+      SIDEBAR_MIN,
+      Math.min(SIDEBAR_MAX, startWidth + ev.clientX - startX)
+    )
+  }
+  const onUp = () => {
+    resizing.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    settingsStore.update({ sidebarWidth: settingsStore.settings.sidebarWidth })
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+function resetSidebarWidth() {
+  settingsStore.update({ sidebarWidth: SIDEBAR_DEFAULT })
+}
+
+// 窗口标题跟随活动标签
+function syncWindowTitle() {
+  const tab = tabsStore.activeTab
+  window.api.win.setTitle(tab ? `${tab.title} — ShellDesk` : 'ShellDesk')
+}
+watch(
+  () => {
+    const t = tabsStore.activeTab
+    return t ? `${t.id}|${t.title}` : ''
+  },
+  syncWindowTitle
+)
 
 watch(tabs, (newTabs, oldTabs) => {
   if (!oldTabs) return
@@ -185,6 +214,7 @@ onMounted(async () => {
   await Promise.all([shortcutsStore.load(), settingsStore.load()])
   // 2.7: 会话恢复 — 从 settings 读取上次标签布局
   restoreTabs()
+  syncWindowTitle()
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('open-settings', () => { showSettings.value = true })
   // S4: 关窗前保存标签布局 (onUnmounted 在 Electron 关窗时不保证触发)
@@ -239,6 +269,17 @@ function restoreTabs() {
 .app-container { display: flex; flex-direction: column; height: 100%; }
 .body { flex: 1; display: flex; min-height: 0; }
 .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+/* 侧栏宽度拖拽手柄 */
+.sidebar-resizer {
+  flex: none;
+  width: 4px;
+  margin-left: -2px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+  transition: background 0.15s;
+}
+.sidebar-resizer:hover, .sidebar-resizer.active { background: rgba(255, 176, 0, 0.45); }
 .terminal-area { flex: 1; position: relative; overflow: hidden; background: var(--bg-0); }
 .empty-state { display: flex; align-items: center; justify-content: center; height: 100%; }
 .empty-card {

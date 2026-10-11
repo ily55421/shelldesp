@@ -8,9 +8,12 @@
         v-model="searchQuery"
         class="search-input"
         placeholder="搜索..."
+        @input="doSearch('next')"
         @keydown.enter.prevent="doSearch($event.shiftKey ? 'prev' : 'next')"
         @keydown.esc="closeSearch"
       />
+      <!-- 结果计数 (借鉴 shell-rs 的悬浮查找条 x/y) -->
+      <span v-if="searchQuery" class="search-count">{{ searchCount }}</span>
       <button class="search-btn" @click="doSearch('prev')" title="上一个 (Shift+Enter)">↑</button>
       <button class="search-btn" @click="doSearch('next')" title="下一个 (Enter)">↓</button>
       <button class="search-btn close" @click="closeSearch" title="关闭 (Esc)">✕</button>
@@ -51,6 +54,7 @@ import '@xterm/xterm/css/xterm.css'
 import type { Tab } from '../types'
 import { useTabsStore } from '../stores/tabs'
 import { useSettingsStore, THEME_PRESETS } from '../stores/settings'
+import { handleAppShortcut } from '../composables/useAppShortcuts'
 
 const props = defineProps<{
   tab: Tab
@@ -120,6 +124,10 @@ function doReconnect() {
   }
 
   // 重新初始化终端 (重新注册事件 + 重新 create/connect)
+  // 先释放旧终端的搜索订阅, 否则 initTerminal 覆盖引用后旧订阅永不释放
+  searchResultDisposable?.dispose()
+  searchResultDisposable = null
+  searchAddon = null
   if (term) { term.dispose(); term = null; fitAddon = null }
   if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null }
   if (contextHandler && containerRef.value) {
@@ -144,6 +152,9 @@ watch(() => settingsStore.settings.theme, (v) => {
 })
 
 // 2.4: 搜索
+const searchCount = ref('')
+let searchResultDisposable: { dispose: () => void } | null = null
+
 function openSearch() {
   ctxMenu.value.visible = false
   showSearch.value = true
@@ -152,9 +163,15 @@ function openSearch() {
 function closeSearch() {
   showSearch.value = false
   searchQuery.value = ''
+  searchCount.value = ''
+  searchAddon?.clearDecorations()
 }
 function doSearch(direction: 'next' | 'prev') {
-  if (!searchAddon || !searchQuery.value) return
+  if (!searchAddon || !searchQuery.value) {
+    searchCount.value = ''
+    return
+  }
+  // 计数由 onDidChangeResults 回调更新 (在 initTerminal 中注册)
   if (direction === 'next') searchAddon.findNext(searchQuery.value)
   else searchAddon.findPrevious(searchQuery.value)
 }
@@ -206,6 +223,10 @@ function initTerminal() {
   // 2.4: 加载搜索 addon
   searchAddon = new SearchAddon()
   term.loadAddon(searchAddon)
+  // 结果计数 (借鉴 shell-rs 的悬浮查找条 x/y)
+  searchResultDisposable = searchAddon.onDidChangeResults((e) => {
+    searchCount.value = e.resultCount > 0 ? `${e.resultIndex + 1}/${e.resultCount}` : '无结果'
+  })
   term.open(containerRef.value)
   fitAddon.fit()
 
@@ -213,6 +234,10 @@ function initTerminal() {
   term.attachCustomKeyEventHandler((e) => {
     if (!term) return true
     if (e.type !== 'keydown') return true
+
+    // 应用级快捷键 (Ctrl+Tab / Ctrl+1~9 / 字号缩放 / Ctrl+B / Ctrl+T / F11 等)
+    // 已消费则返回 false, 不再发送给 shell
+    if (handleAppShortcut(e)) return false
 
     // Ctrl+C: 有选中则复制到剪贴板, 否则作为 SIGINT 发送给 shell
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'c') {
@@ -300,6 +325,19 @@ function initTerminal() {
     window.api.ssh.onData(props.tab.id, (data: string) => {
       term?.write(data)
     })
+    // 远端系统探测结果 (连接成功后主进程用独立通道探测)
+    window.api.ssh.onRemoteOs(props.tab.id, (info) => {
+      tabsStore.updateRemoteOs(props.tab.id, info)
+    })
+    // 主机密钥与已保存的不一致: 在终端里说明并给出处理建议
+    window.api.ssh.onHostKeyMismatch(props.tab.id, (info) => {
+      term?.write(
+        `\r\n\x1b[31m[主机密钥与已保存的不一致, 连接已中止]\x1b[0m\r\n` +
+        `\x1b[33m  已保存: ${info.stored}\x1b[0m\r\n` +
+        `\x1b[33m  本次:   ${info.seen}\x1b[0m\r\n` +
+        `\x1b[33m  若服务器确实更换了密钥, 请删除 ${'%APPDATA%\\shelldesk\\config\\known_hosts.json'} 中的对应条目后重试。\x1b[0m\r\n`
+      )
+    })
     window.api.ssh.onExit(props.tab.id, () => {
       if (disconnected) return
       disconnected = true
@@ -353,7 +391,11 @@ function initTerminal() {
       }
       if (!result) {
         // 新连接: connect → shell → 就绪
-        return window.api.ssh.connect(props.tab.id, props.tab.ssh!).then(() => {
+        // 注意: 必须传普通对象。props.tab.ssh 是 Pinia 的 reactive 代理,
+        // 直接交给 ipcRenderer.invoke 会因结构化克隆失败而报
+        // 「An object could not be cloned.」—— 终端里只会看到「连接失败」。
+        const sshConfig = JSON.parse(JSON.stringify(props.tab.ssh!))
+        return window.api.ssh.connect(props.tab.id, sshConfig).then(() => {
           return window.api.ssh.shell(props.tab.id, { cols, rows })
         }).then(() => {
           sshReady = true
@@ -419,6 +461,9 @@ onUnmounted(() => {
   }
   if (resizeTimer) clearTimeout(resizeTimer)
   resizeObserver?.disconnect()
+  searchResultDisposable?.dispose()
+  searchResultDisposable = null
+  searchAddon = null
   term?.dispose()
   term = null
   fitAddon = null
@@ -531,6 +576,16 @@ onUnmounted(() => {
 }
 .search-btn:hover { background: var(--bg-3); color: var(--amber); }
 .search-btn.close:hover { color: var(--red); }
+
+/* 搜索结果计数 (借鉴 shell-rs 的悬浮查找条 x/y) */
+.search-count {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--tx-2);
+  min-width: 42px;
+  text-align: center;
+  white-space: nowrap;
+}
 
 /* 2.5: 右键菜单 — S5: fixed 定位, 避免 absolute+clientX/Y 偏移 */
 .ctx-menu {

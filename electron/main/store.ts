@@ -16,6 +16,10 @@ interface StoreSchema {
     theme: string
     confirmClose: boolean
     autoReconnect: boolean
+    rememberWindowSize: boolean
+    rememberWindowPosition: boolean
+    sidebarWidth: number
+    sidebarVisible: boolean
     lastTabs?: any[]
   }
 }
@@ -33,10 +37,19 @@ const store = new Store<StoreSchema>({
       fontFamily: 'IBM Plex Mono, Cascadia Code, Consolas, "Courier New", monospace',
       theme: 'amber',
       confirmClose: false,
-      autoReconnect: false
+      autoReconnect: false,
+      rememberWindowSize: true,
+      rememberWindowPosition: true,
+      sidebarWidth: 264,
+      sidebarVisible: true
     }
   }
 })
+
+/** 主进程侧读取设置 (窗口创建时用, 早于渲染进程加载) */
+export function getStoredSettings(): StoreSchema['settings'] {
+  return store.get('settings')
+}
 
 // B1: 加密/解密密码
 function encryptPassword(plain: string): string {

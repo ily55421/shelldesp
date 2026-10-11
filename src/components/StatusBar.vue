@@ -11,17 +11,18 @@
       {{ cwdShort }}
     </div>
     <div class="spacer"></div>
+    <!-- 远端系统 (探测成功后显示, 借鉴 shell-rs 的 HostMark) -->
+    <div v-if="remoteOs" class="cell" :title="'远端系统: ' + remoteOs.label">
+      {{ remoteOs.label }}
+    </div>
     <div class="cell">UTF-8</div>
     <div class="cell">CRLF</div>
     <div class="cell">{{ fontSize }}px</div>
-    <div class="cell" :style="{ color: latency > 100 ? 'var(--red)' : 'var(--green)' }">
-      {{ latency > 0 ? latency + 'ms' : '—' }}
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import { useTabsStore } from '../stores/tabs'
 import { useSettingsStore } from '../stores/settings'
 
@@ -31,11 +32,12 @@ const activeTab = computed(() => tabsStore.activeTab)
 
 // 2.6: 从 settings store 读真实字号
 const fontSize = computed(() => settingsStore.settings.fontSize)
-const latency = ref(0)
-let latencyTimer: ReturnType<typeof setInterval> | null = null
 
 // H3: 从 tab.status 读取真实连接状态
 const connected = computed(() => activeTab.value?.status === 'connected')
+
+// 远端系统标签 (SSH 探测结果)
+const remoteOs = computed(() => activeTab.value?.remoteOs || null)
 
 const shellLabel = computed(() => {
   const tab = activeTab.value
@@ -61,23 +63,7 @@ const cwdShort = computed(() => {
   if (c.length > 40) return '...' + c.slice(-37)
   return c
 })
-
-onMounted(() => {
-  // S2: SSH 延迟定时测量 — 独立 exec 通道, 不污染用户 shell
-  latencyTimer = setInterval(async () => {
-    const tab = activeTab.value
-    if (tab && tab.type === 'ssh' && tab.status === 'connected') {
-      const ms = await window.api.ssh.ping(tab.id)
-      latency.value = ms >= 0 ? ms : 0
-    } else {
-      latency.value = 0
-    }
-  }, 10000)
-})
-
-onUnmounted(() => {
-  if (latencyTimer) clearInterval(latencyTimer)
-})
+// 延迟测量已移到 TabBar (每个 SSH 标签各自显示), 此处不再重复轮询
 </script>
 
 <style scoped>

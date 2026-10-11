@@ -12,5 +12,23 @@ win:
   target:
     - target: dir
       arch: [x64]
+    - target: nsis
+      arch: [x64]
   signAndEditExecutable: false
   icon: assets/icons/icon.ico
+
+# 安装包: 每用户安装(无需管理员), 可覆盖升级, 保留用户数据
+nsis:
+  oneClick: false                      # 带向导
+  perMachine: false                    # 安装到 %LOCALAPPDATA%\Programs, 不写 HKLM
+  allowToChangeInstallationDirectory: false  # 目录由安装包自动判定: 已有安装→注册表记录; 免安装版→install-path.txt (见 build/installer.nsh)
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ShellDesk
+  artifactName: ShellDesk-${version}-setup.${ext}
+  installerIcon: assets/icons/icon.ico
+  uninstallerIcon: assets/icons/icon.ico
+  include: build/installer.nsh
+  deleteAppDataOnUninstall: false      # 卸载也不删 %APPDATA%\shelldesk (配置/主机/指令)
+  runAfterFinish: true
+  # 运行中的 ShellDesk 由内置 CHECK_APP_RUNNING 处理: 升级静默关闭, 首次安装提示关闭

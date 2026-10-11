@@ -1,6 +1,6 @@
 {
   "name": "shelldesk",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "ShellDesk - Terminal / SSH / 快捷指令",
   "main": "./out/main/index.js",
   "author": "shelldesk",
@@ -14,9 +14,11 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "node --test test/*.test.js",
+    "test": "node scripts/run-tests.mjs",
+    "test:unit": "node scripts/run-tests.mjs --unit-only",
+    "test:e2e": "node scripts/run-tests.mjs --e2e-only",
     "postinstall": "node scripts/install-hooks.js",
-    "package:win": "electron-vite build && electron-builder --win --x64"
+    "package:win": "electron-vite build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "@homebridge/node-pty-prebuilt-multiarch": "^0.14.1",

@@ -55,6 +55,41 @@
         </label>
       </div>
 
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" :checked="settings.rememberWindowSize" @change="update('rememberWindowSize', ($event.target as HTMLInputElement).checked)" />
+          记住窗口大小 (含最大化状态)
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" :checked="settings.rememberWindowPosition" @change="update('rememberWindowPosition', ($event.target as HTMLInputElement).checked)" />
+          记住窗口位置
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" :checked="settings.showSystemStatus" @change="update('showSystemStatus', ($event.target as HTMLInputElement).checked)" />
+          显示服务器状态面板 (SSH 标签下采集远端 CPU / 内存 / 磁盘 / 网络)
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">快捷键</label>
+        <div class="shortcut-hint">
+          <span>Ctrl+T 新建终端</span>
+          <span>Ctrl+Shift+W 关闭标签</span>
+          <span>Ctrl+Tab / Ctrl+Shift+Tab 切换标签</span>
+          <span>Ctrl+1~9 跳转标签</span>
+          <span>Ctrl+= / Ctrl+- / Ctrl+0 字号</span>
+          <span>Ctrl+Alt+B 收起侧栏</span>
+          <span>Ctrl+Shift+F 终端搜索</span>
+          <span>F11 全屏</span>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button class="btn" @click="$emit('close')">完成</button>
       </div>
@@ -83,5 +118,13 @@ select.input {
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px;
+}
+
+.shortcut-hint {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--tx-2);
 }
 </style>

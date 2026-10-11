@@ -8,6 +8,14 @@ export interface AppSettings {
   theme: string
   confirmClose: boolean
   autoReconnect: boolean
+  // 窗口交互: 记忆窗口尺寸/位置 (主进程启动时读取)
+  rememberWindowSize: boolean
+  rememberWindowPosition: boolean
+  // 布局: 侧栏宽度与可见性
+  sidebarWidth: number
+  sidebarVisible: boolean
+  /** 显示服务器状态面板 (SSH 标签下采集远端 CPU/内存/磁盘/网络) */
+  showSystemStatus: boolean
   lastTabs?: Array<{
     title: string
     type: 'local' | 'ssh'
@@ -23,7 +31,12 @@ const DEFAULTS: AppSettings = {
   fontFamily: 'IBM Plex Mono, Cascadia Code, Consolas, "Courier New", monospace',
   theme: 'amber',
   confirmClose: false,
-  autoReconnect: false
+  autoReconnect: false,
+  rememberWindowSize: true,
+  rememberWindowPosition: true,
+  sidebarWidth: 264,
+  sidebarVisible: true,
+  showSystemStatus: true
 }
 
 export const THEME_PRESETS: Record<string, Record<string, string>> = {
