@@ -255,6 +255,54 @@ try {
     /本地终端无远端状态|等待连接/.test(panelInitial.text), JSON.stringify(panelInitial.text))
   check('面板刷新按钮存在', panelInitial.hasRefresh === true)
 
+  // --- 2b. 标签栏加号 → 新建菜单 (回归: 曾被全局 click 监听立刻关掉) ---
+  // 这条是用户实测报过的缺陷: 点加号「没反应」。
+  // 根因是 window 的 click 监听在按钮 handler 之后触发, 把刚打开的菜单又关了。
+  console.log('\n[2b] 标签栏加号与新建菜单')
+  const tabsBefore = await cdp.evaluate(`document.querySelectorAll('.tab').length`)
+  await cdp.evaluate(`document.querySelector('.tab-new').click()`)
+  await new Promise((r) => setTimeout(r, 400))
+  const newMenu = await cdp.evaluate(`(() => {
+    const m = document.querySelector('.new-menu')
+    return {
+      exists: !!m,
+      items: m ? [...m.querySelectorAll('.menu-item')].map(i => i.innerText.replace(/\\s+/g, ' ').trim()) : []
+    }
+  })()`)
+  check('点加号能打开新建菜单', newMenu.exists === true, JSON.stringify(newMenu.items))
+  check('新建菜单含本地终端与 SSH 入口',
+    newMenu.items.length === 3 && newMenu.items.some(i => /PowerShell/.test(i)) && newMenu.items.some(i => /SSH/.test(i)),
+    JSON.stringify(newMenu.items))
+
+  // 点菜单项应真的新建标签
+  await cdp.evaluate(`(() => {
+    const item = [...document.querySelectorAll('.new-menu .menu-item')].find(i => /命令提示符/.test(i.innerText))
+    if (item) item.click()
+    return true
+  })()`)
+  await new Promise((r) => setTimeout(r, 1500))
+  const tabsAfter = await cdp.evaluate(`document.querySelectorAll('.tab').length`)
+  check('点菜单项真的新建了标签', tabsAfter === tabsBefore + 1, `${tabsBefore} → ${tabsAfter}`)
+  check('新建后菜单自动关闭', (await cdp.evaluate(`!!document.querySelector('.new-menu')`)) === false)
+
+  // 外部点击应关闭菜单 (与上一条相对, 保证「该关的时候要关」)
+  await cdp.evaluate(`document.querySelector('.tab-new').click()`)
+  await new Promise((r) => setTimeout(r, 300))
+  const reopened = await cdp.evaluate(`!!document.querySelector('.new-menu')`)
+  await cdp.evaluate(`document.querySelector('.terminal-area').click()`)
+  await new Promise((r) => setTimeout(r, 300))
+  const closedByOutside = await cdp.evaluate(`!!document.querySelector('.new-menu')`)
+  check('再次点加号仍能打开 (toggle 正常)', reopened === true)
+  check('点击菜单外部会关闭', closedByOutside === false)
+
+  // 关掉刚建的标签, 恢复现场给后续步骤
+  await cdp.evaluate(`(() => {
+    const closes = [...document.querySelectorAll('.tab .t-close')]
+    if (closes.length > 1) closes[closes.length - 1].click()
+    return true
+  })()`)
+  await new Promise((r) => setTimeout(r, 800))
+
   // --- 3. 打开 SSH 连接对话框 ---
   console.log('\n[3] 打开 SSH 连接对话框 (真实点击)')
   const opened = await cdp.evaluate(`(() => {

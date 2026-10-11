@@ -254,9 +254,15 @@ watch(() => tabs.value.map(t => t.id).join('|'), () => {
 })
 
 // F3: 右键菜单外部点击关闭
-function onGlobalClick() {
+// 注意: 必须排除「加号按钮」与「新建菜单」自身。
+// 按钮的 @click 先把 showNewMenu 置 true, 事件随后继续冒泡到 window,
+// 若这里无条件关闭, 菜单会立刻被关掉 —— 表现就是「点加号没反应」。
+function onGlobalClick(e: MouseEvent) {
+  const target = e.target as HTMLElement | null
+  const fromNewButton = !!target?.closest('.tab-new')
+  const fromNewMenu = !!target?.closest('.new-menu')
   if (contextMenu.value.visible) contextMenu.value.visible = false
-  if (showNewMenu.value) showNewMenu.value = false
+  if (showNewMenu.value && !fromNewButton && !fromNewMenu) showNewMenu.value = false
 }
 
 onMounted(() => {
